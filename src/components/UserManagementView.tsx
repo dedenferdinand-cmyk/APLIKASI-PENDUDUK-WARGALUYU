@@ -194,169 +194,204 @@ export default function UserManagementView({ currentUser, addToast }: UserManage
     e.preventDefault();
     if (!newDusunNama.trim()) return;
 
-    const list = [...wilayahList];
-    const newDusun: Dusun = {
-      id: "dusun-" + Date.now(),
-      nama: newDusunNama.toUpperCase().trim(),
-      rws: []
-    };
+    try {
+      const list = [...wilayahList];
+      const newDusun: Dusun = {
+        id: "dusun-" + Date.now(),
+        nama: newDusunNama.toUpperCase().trim(),
+        rws: []
+      };
 
-    list.push(newDusun);
-    db.saveWilayah(list, currentUser);
-    setNewDusunNama("");
-    fetchWilayah();
-    addToast(`Berhasil menambahkan wilayah ${newDusun.nama}!`, "success");
+      list.push(newDusun);
+      db.saveWilayah(list, currentUser);
+      setNewDusunNama("");
+      fetchWilayah();
+      addToast(`Berhasil menambahkan wilayah ${newDusun.nama}!`, "success");
+    } catch (err: any) {
+      console.error(err);
+      addToast(`Gagal menambah Dusun: ${err.message || err}`, "error");
+    }
   };
 
   const handleRenameDusun = (dusunId: string) => {
     if (!editingDusunNama.trim()) return;
 
-    const list = wilayahList.map(d => {
-      if (d.id === dusunId) {
-        return { ...d, nama: editingDusunNama.toUpperCase().trim() };
-      }
-      return d;
-    });
+    try {
+      const list = wilayahList.map(d => {
+        if (d.id === dusunId) {
+          return { ...d, nama: editingDusunNama.toUpperCase().trim() };
+        }
+        return d;
+      });
 
-    db.saveWilayah(list, currentUser);
-    setEditingDusunId(null);
-    setEditingDusunNama("");
-    fetchWilayah();
-    addToast("Nama Dusun berhasil diperbarui!", "success");
+      db.saveWilayah(list, currentUser);
+      setEditingDusunId(null);
+      setEditingDusunNama("");
+      fetchWilayah();
+      addToast("Nama Dusun berhasil diperbarui!", "success");
+    } catch (err: any) {
+      console.error(err);
+      addToast(`Gagal merename Dusun: ${err.message || err}`, "error");
+    }
   };
 
   const handleDeleteDusun = (dusunId: string, namaDusun: string) => {
-    const dusunObj = wilayahList.find(d => d.id === dusunId);
-    if (dusunObj && dusunObj.rws.length > 0) {
-      addToast(`Tidak bisa menghapus ${namaDusun} karena masih memiliki RW di bawahnya!`, "warning");
-      return;
+    try {
+      const dusunObj = wilayahList.find(d => d.id === dusunId);
+      if (dusunObj && dusunObj.rws.length > 0) {
+        addToast(`Tidak bisa menghapus ${namaDusun} karena masih memiliki RW di bawahnya!`, "warning");
+        return;
+      }
+
+      const confirm = window.confirm(`Apakah Anda yakin ingin menghapus wilayah ${namaDusun}?`);
+      if (!confirm) return;
+
+      const list = wilayahList.filter(d => d.id !== dusunId);
+      db.saveWilayah(list, currentUser);
+      fetchWilayah();
+      addToast(`Wilayah ${namaDusun} didelete dari draf sistem.`, "success");
+    } catch (err: any) {
+      console.error(err);
+      addToast(`Gagal menghapus Dusun: ${err.message || err}`, "error");
     }
-
-    const confirm = window.confirm(`Apakah Anda yakin ingin menghapus wilayah ${namaDusun}?`);
-    if (!confirm) return;
-
-    const list = wilayahList.filter(d => d.id !== dusunId);
-    db.saveWilayah(list, currentUser);
-    fetchWilayah();
-    addToast(`Wilayah ${namaDusun} didelete dari draf sistem.`, "success");
   };
 
   const handleAddRw = (dusunId: string) => {
-    const nrw = newRwNomor[dusunId]?.trim();
-    if (!nrw) {
-      addToast("Harap isi nomor RW (contoh: 05) terlebih dahulu!", "warning");
-      return;
+    try {
+      let nrw = newRwNomor[dusunId]?.trim();
+      if (!nrw) {
+        addToast("Harap isi nomor RW (contoh: 05) terlebih dahulu!", "warning");
+        return;
+      }
+
+      // Auto-pad single digit numbers (e.g. "5" -> "05")
+      if (/^\d$/.test(nrw)) {
+        nrw = "0" + nrw;
+      }
+
+      const list = [...wilayahList];
+      const dusunIndex = list.findIndex(d => d.id === dusunId);
+      if (dusunIndex === -1) return;
+
+      // Check duplicate RW within this Dusun
+      if (list[dusunIndex].rws.find(r => r.nomor === nrw)) {
+        addToast(`RW ${nrw} sudah terdaftar di bawah dusun ini!`, "error");
+        return;
+      }
+
+      list[dusunIndex].rws.push({
+        id: "rw-" + Date.now(),
+        nomor: nrw,
+        rts: ["01", "02"] // default standard RTs
+      });
+
+      db.saveWilayah(list, currentUser);
+      setNewRwNomor({ ...newRwNomor, [dusunId]: "" });
+      fetchWilayah();
+      addToast(`RW ${nrw} berhasil ditambahkan di ${list[dusunIndex].nama}!`, "success");
+    } catch (err: any) {
+      console.error(err);
+      addToast(`Gagal menambah RW: ${err.message || err}`, "error");
     }
-
-    if (nrw.length < 2) {
-      addToast("Nomor RW harus minimal 2 digit!", "warning");
-      return;
-    }
-
-    const list = [...wilayahList];
-    const dusunIndex = list.findIndex(d => d.id === dusunId);
-    if (dusunIndex === -1) return;
-
-    // Check duplicate RW within this Dusun
-    if (list[dusunIndex].rws.find(r => r.nomor === nrw)) {
-      addToast(`RW ${nrw} sudah terdaftar di bawah dusun ini!`, "error");
-      return;
-    }
-
-    list[dusunIndex].rws.push({
-      id: "rw-" + Date.now(),
-      nomor: nrw,
-      rts: ["01", "02"] // default standard RTs
-    });
-
-    db.saveWilayah(list, currentUser);
-    setNewRwNomor({ ...newRwNomor, [dusunId]: "" });
-    fetchWilayah();
-    addToast(`RW ${nrw} berhasil ditambahkan di ${list[dusunIndex].nama}!`, "success");
   };
 
   const handleDeleteRw = (dusunId: string, rwId: string, nomorRw: string) => {
-    const confirm = window.confirm(`Apakah Anda yakin ingin menghapus RW ${nomorRw} beserta seluruh RT di dalamnya?`);
-    if (!confirm) return;
+    try {
+      const confirm = window.confirm(`Apakah Anda yakin ingin menghapus RW ${nomorRw} beserta seluruh RT di dalamnya?`);
+      if (!confirm) return;
 
-    const list = wilayahList.map(d => {
-      if (d.id === dusunId) {
-        return {
-          ...d,
-          rws: d.rws.filter(r => r.id !== rwId)
-        };
-      }
-      return d;
-    });
+      const list = wilayahList.map(d => {
+        if (d.id === dusunId) {
+          return {
+            ...d,
+            rws: d.rws.filter(r => r.id !== rwId)
+          };
+        }
+        return d;
+      });
 
-    db.saveWilayah(list, currentUser);
-    fetchWilayah();
-    addToast(`RW ${nomorRw} berhasil dihapus dari draf area.`, "success");
+      db.saveWilayah(list, currentUser);
+      fetchWilayah();
+      addToast(`RW ${nomorRw} berhasil dihapus dari draf area.`, "success");
+    } catch (err: any) {
+      console.error(err);
+      addToast(`Gagal menghapus RW: ${err.message || err}`, "error");
+    }
   };
 
   const handleAddRt = (dusunId: string, rwId: string) => {
-    const key = `${dusunId}-${rwId}`;
-    const nrt = newRtNomor[key]?.trim();
-    if (!nrt) {
-      addToast("Harap isi nomor RT terlebih dahulu!", "warning");
-      return;
-    }
-
-    if (nrt.length < 2) {
-      addToast("Nomor RT harus minimal 2 digit!", "warning");
-      return;
-    }
-
-    const list = wilayahList.map(d => {
-      if (d.id === dusunId) {
-        return {
-          ...d,
-          rws: d.rws.map(r => {
-            if (r.id === rwId) {
-              if (r.rts.includes(nrt)) {
-                addToast(`RT ${nrt} sudah terdaftar di bawah RW ini!`, "error");
-                return r;
-              }
-              addToast(`RT ${nrt} berhasil dilampirkan!`, "success");
-              return {
-                ...r,
-                rts: [...r.rts, nrt].sort((a, b) => a.localeCompare(b))
-              };
-            }
-            return r;
-          })
-        };
+    try {
+      const key = `${dusunId}-${rwId}`;
+      let nrt = newRtNomor[key]?.trim();
+      if (!nrt) {
+        addToast("Harap isi nomor RT terlebih dahulu!", "warning");
+        return;
       }
-      return d;
-    });
 
-    db.saveWilayah(list, currentUser);
-    setNewRtNomor({ ...newRtNomor, [key]: "" });
-    fetchWilayah();
+      // Auto-pad single digit numbers (e.g. "4" -> "04")
+      if (/^\d$/.test(nrt)) {
+        nrt = "0" + nrt;
+      }
+
+      const list = wilayahList.map(d => {
+        if (d.id === dusunId) {
+          return {
+            ...d,
+            rws: d.rws.map(r => {
+              if (r.id === rwId) {
+                if (r.rts.includes(nrt)) {
+                  addToast(`RT ${nrt} sudah terdaftar di bawah RW ini!`, "error");
+                  return r;
+                }
+                addToast(`RT ${nrt} berhasil dilampirkan!`, "success");
+                return {
+                  ...r,
+                  rts: [...r.rts, nrt].sort((a, b) => a.localeCompare(b))
+                };
+              }
+              return r;
+            })
+          };
+        }
+        return d;
+      });
+
+      db.saveWilayah(list, currentUser);
+      setNewRtNomor({ ...newRtNomor, [key]: "" });
+      fetchWilayah();
+    } catch (err: any) {
+      console.error(err);
+      addToast(`Gagal menambah RT: ${err.message || err}`, "error");
+    }
   };
 
   const handleDeleteRt = (dusunId: string, rwId: string, nomorRt: string) => {
-    const list = wilayahList.map(d => {
-      if (d.id === dusunId) {
-        return {
-          ...d,
-          rws: d.rws.map(r => {
-            if (r.id === rwId) {
-              return {
-                ...r,
-                rts: r.rts.filter(rtNum => rtNum !== nomorRt)
-              };
-            }
-            return r;
-          })
-        };
-      }
-      return d;
-    });
+    try {
+      const list = wilayahList.map(d => {
+        if (d.id === dusunId) {
+          return {
+            ...d,
+            rws: d.rws.map(r => {
+              if (r.id === rwId) {
+                return {
+                  ...r,
+                  rts: r.rts.filter(rtNum => rtNum !== nomorRt)
+                };
+              }
+              return r;
+            })
+          };
+        }
+        return d;
+      });
 
-    db.saveWilayah(list, currentUser);
-    fetchWilayah();
-    addToast(`RT ${nomorRt} dilepaskan dari struktur.`, "success");
+      db.saveWilayah(list, currentUser);
+      fetchWilayah();
+      addToast(`RT ${nomorRt} dilepaskan dari struktur.`, "success");
+    } catch (err: any) {
+      console.error(err);
+      addToast(`Gagal menghapus RT: ${err.message || err}`, "error");
+    }
   };
 
 
@@ -645,10 +680,10 @@ export default function UserManagementView({ currentUser, addToast }: UserManage
                       <div className="flex gap-1 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 p-1.5 rounded-xl">
                         <input
                           type="text"
-                          maxLength={2}
+                          maxLength={10}
                           placeholder="Nomor RW (ex. 05)..."
                           value={newRwNomor[dusun.id] || ""}
-                          onChange={(e) => setNewRwNomor({ ...newRwNomor, [dusun.id]: e.target.value.replace(/\D/g, "") })}
+                          onChange={(e) => setNewRwNomor({ ...newRwNomor, [dusun.id]: e.target.value })}
                           className="flex-1 bg-transparent px-2 text-[11px] focus:outline-none dark:text-white"
                         />
                         <button
@@ -707,10 +742,10 @@ export default function UserManagementView({ currentUser, addToast }: UserManage
                               <div className="flex gap-1 items-center bg-slate-50 dark:bg-slate-950/40 p-1 rounded-lg border border-slate-100 dark:border-slate-850">
                                 <input
                                   type="text"
-                                  maxLength={2}
+                                  maxLength={10}
                                   placeholder="RT Baru (ex. 04)"
                                   value={newRtNomor[key] || ""}
-                                  onChange={(e) => setNewRtNomor({ ...newRtNomor, [key]: e.target.value.replace(/\D/g, "") })}
+                                  onChange={(e) => setNewRtNomor({ ...newRtNomor, [key]: e.target.value })}
                                   className="w-full bg-transparent px-1.5 text-[10.5px] focus:outline-none text-slate-650 dark:text-slate-350"
                                 />
                                 <button

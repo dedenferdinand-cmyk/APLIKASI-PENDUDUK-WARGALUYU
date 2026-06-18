@@ -392,10 +392,10 @@ export class MockSupabaseClient {
     try {
       const { error } = await supabase.from("users").select("id").limit(1);
       if (error) {
-        if (error.code === "PGRST116" || error.code === "42P01") {
+        if (error.code === "PGRST116" || error.code === "42P01" || error.code === "PGRST205") {
           return {
             success: true,
-            message: "Koneksi ke Supabase berhasil! Namun tabel 'users' belum dibuat di database Anda."
+            message: "Koneksi ke Supabase berhasil! Namun tabel 'users' belum dideklarasikan di skema cloud Anda."
           };
         }
         return {

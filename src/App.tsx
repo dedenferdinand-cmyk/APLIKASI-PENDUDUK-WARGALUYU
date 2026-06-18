@@ -298,7 +298,7 @@ export default function App() {
           
           <div className="flex items-center gap-2 text-slate-500">
             <Clock className="w-4 h-4 text-emerald-500 animate-pulse" />
-            <span className="font-medium">Lokasi: <strong>Kec. Arjasari, Kabupaten Bandung</strong></span>
+            <span className="font-medium">Lokasi: <strong>Desa Wargaluyu Kecamatan Arjasari Kabupaten Bandung</strong></span>
           </div>
 
           <div className="flex items-center gap-4">
