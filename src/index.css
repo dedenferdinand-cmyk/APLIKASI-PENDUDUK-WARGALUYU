@@ -1,0 +1,218 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-slate-150: #eef2f6;
+  --color-slate-205: #cbd5e1;
+  --color-slate-250: #cbd5e1;
+  --color-slate-355: #94a3b8;
+  --color-slate-405: #738496;
+  --color-slate-450: #475569; /* Slate-600 grade for high-contrast slate-450 */
+  --color-slate-455: #334155; /* Slate-700 grade for slate-455 */
+  --color-slate-650: #334155;
+  --color-slate-705: #1e293b;
+  --color-slate-710: #1e293b;
+  --color-slate-755: #1e293b;
+  --color-slate-805: #0f172a;
+  --color-slate-850: #0f172a;
+  --color-slate-955: #030712;
+
+  --color-emerald-250: #4ade80;
+  --color-emerald-305: #86efac;
+  --color-emerald-450: #10b981;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    font-family: var(--font-sans);
+    background-color: #f8fafc; /* Beautiful soft slate-50 neutral, zero glare */
+    color: #0f172a;
+  }
+  .dark body {
+    background-color: #0b111e; /* Sleek midnight background */
+    color: #f8fafc;
+  }
+
+  /* Comprehensive Solid High-Contrast, No Glare Overrides */
+  
+  /* High contrast colors for Light Mode to fix white-on-white/faint text issues on white backgrounds */
+  html:not(.dark) .text-slate-800,
+  html:not(.dark) .text-slate-755,
+  html:not(.dark) .text-slate-705,
+  html:not(.dark) .text-slate-850,
+  html:not(.dark) .text-slate-900,
+  html:not(.dark) [class*="text-slate-8"] {
+    color: #0f172a !important; /* Extremely high contrast solid dark carbon color */
+  }
+
+  html:not(.dark) .text-slate-500,
+  html:not(.dark) .text-slate-450,
+  html:not(.dark) .text-slate-400,
+  html:not(.dark) [class*="text-slate-4"],
+  html:not(.dark) [class*="text-slate-5"] {
+    color: #2e3c50 !important; /* High contrast dark slate gray for labels / secondary text / headers */
+  }
+  
+  html:not(.dark) input::placeholder,
+  html:not(.dark) select::placeholder {
+    color: #475569 !important;
+  }
+
+  /* Generic white dashboard blocks & tables */
+  html:not(.dark) .bg-white {
+    background-color: #ffffff !important;
+    border-width: 1px !important;
+    border-color: #e2e8f0 !important; /* Slate-200 border */
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05) !important;
+  }
+
+  /* Dark mode overrides for cards/containers */
+  .dark .dark\:bg-slate-900,
+  .dark [class*="dark:bg-slate-90"],
+  .dark .bg-white {
+    background-color: #131c2e !important; /* Dark solid Slate */
+    border-width: 1px !important;
+    border-color: #24324c !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2) !important;
+  }
+
+  /* Top ribbon, navigation panel, details elements */
+  html:not(.dark) .bg-slate-50\/50 {
+    background-color: #f1f5f9 !important; /* Slate-100 */
+    border-color: #e2e8f0 !important;
+  }
+
+  .dark .dark\:bg-slate-950\/20 {
+    background-color: #0c1221 !important; /* Solid dark frame background */
+    border-color: #1e293b !important;
+  }
+
+  /* Soft nested containers */
+  html:not(.dark) .bg-slate-100\/50, html:not(.dark) .bg-slate-50 {
+    background-color: #f8fafc !important; /* Slate-50 */
+    border-color: #e2e8f0 !important;
+  }
+
+  .dark .dark\:bg-slate-950\/50, .dark .dark\:bg-slate-950\/20 {
+    background-color: #0c1221 !important;
+    border-color: #1e293b !important;
+  }
+
+  /* Table styles alignment */
+  table {
+    background-color: transparent !important;
+  }
+  
+  tr {
+    background-color: transparent !important;
+    transition: background-color 0.15s ease;
+  }
+  
+  tr:hover {
+    background-color: #f1f5f9 !important;
+  }
+
+  .dark tr:hover {
+    background-color: #17243c !important;
+  }
+
+  /* Form and Input Elements frosting with Solid No Glare */
+  input, 
+  select, 
+  textarea {
+    background-color: #ffffff !important;
+    border-width: 1px !important;
+    border-color: #cbd5e1 !important; /* Solid gray border instead of bright white */
+    color: #0f172a !important; /* Force deep dark slate text in light mode - NO GLARE and ALWAYS visible! */
+    transition: all 0.2s ease-in-out;
+  }
+
+  .dark input, 
+  .dark select, 
+  .dark textarea {
+    background-color: #1a253a !important;
+    border-width: 1px !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important; /* Force high contrast off-white text in dark mode */
+  }
+
+  /* Make sure select options are correctly colored on all systems/browsers */
+  option {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  .dark option {
+    background-color: #1a253a !important;
+    color: #f8fafc !important;
+  }
+
+  input:focus, select:focus, textarea:focus {
+    background-color: #ffffff !important;
+    border-color: #10b981 !important; /* Highlight with tidy Emerald border */
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12) !important;
+  }
+
+  .dark input:focus, .dark select:focus, .dark textarea:focus {
+    background-color: #1a253a !important;
+    border-color: #10b981 !important;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15) !important;
+  }
+}
+
+/* Base custom frosted utilities */
+@utility frosted-glass {
+  background-color: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+@utility dark-frosted-glass {
+  background-color: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+@utility frosted-glass-hover {
+  background-color: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+@utility dark-frosted-glass-hover {
+  background-color: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+@utility frosted-panel {
+  background-color: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+}
+
+@utility dark-frosted-panel {
+  background-color: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+@utility frosted-sidebar {
+  background-color: rgba(6, 78, 59, 0.95);
+  backdrop-filter: blur(20px);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+@utility dark-frosted-sidebar {
+  background-color: rgba(2, 44, 34, 0.95);
+  backdrop-filter: blur(20px);
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+
