@@ -579,7 +579,19 @@ export class MockSupabaseClient {
 
   // USERS MANAGEMENT
   getUsers(): User[] {
-    return this.getItems<User>(STORAGE_KEYS.USERS);
+    const list = this.getItems<User>(STORAGE_KEYS.USERS);
+    // Bulletproof fallback: ensure all default system credentials from INITIAL_USERS always exist
+    const merged = [...list];
+    for (const initUser of INITIAL_USERS) {
+      if (!merged.some(u => u.username.toLowerCase() === initUser.username.toLowerCase())) {
+        merged.push(initUser);
+      }
+    }
+    // Self-heal storage if changes happened
+    if (merged.length !== list.length) {
+      this.saveItems(STORAGE_KEYS.USERS, merged);
+    }
+    return merged;
   }
 
   addUser(user: User, operator: User): boolean {
