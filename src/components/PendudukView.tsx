@@ -79,6 +79,19 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
   // Citizen Detail Modal state
   const [selectedPenduduk, setSelectedPenduduk] = useState<Penduduk | null>(null);
 
+  // Custom Confirmation Modal state to bypass browser window.confirm constraints inside sandboxed iframes
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: () => {}
+  });
+
   useEffect(() => {
     fetchData();
   }, [currentUser]);
@@ -112,15 +125,20 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
     setStatusTinggal("Tetap");
     
     // territorial locks based on operator credentials
+    const dynamicRwList = Array.from(new Set([...db.getRwList(), "01", "02"])).sort((a,b) => a.localeCompare(b));
+    const defaultRw = dynamicRwList[0] || "01";
+    const dynamicRtList = Array.from(new Set([...db.getRtList(currentUser.rw || defaultRw), "01", "02", "03"])).sort((a,b) => a.localeCompare(b));
+    const defaultRt = dynamicRtList[0] || "01";
+
     if (currentUser.role === "KETUA_RT") {
-      setRw(currentUser.rw || "01");
-      setRt(currentUser.rt || "01");
+      setRw(currentUser.rw || defaultRw);
+      setRt(currentUser.rt || defaultRt);
     } else if (currentUser.role === "KETUA_RW") {
-      setRw(currentUser.rw || "01");
-      setRt("01");
+      setRw(currentUser.rw || defaultRw);
+      setRt(defaultRt);
     } else {
-      setRw("01");
-      setRt("01");
+      setRw(defaultRw);
+      setRt(defaultRt);
     }
 
     setIsFormOpen(true);
@@ -147,21 +165,25 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
     setIsFormOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    const confirmDelete = window.confirm("Apakah Anda yakin ingin menghapus arsip penduduk ini?");
-    if (!confirmDelete) return;
-
-    try {
-      const success = await db.deletePenduduk(id, currentUser);
-      if (success) {
-        addToast("Data penduduk berhasil dihapus.", "success");
-        fetchData();
-      } else {
-        addToast("Data penduduk tidak ditemukan.", "warning");
+  const handleDelete = (id: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Konfirmasi Hapus Penduduk",
+      message: "Apakah Anda yakin ingin menghapus arsip data penduduk ini secara permanen?",
+      onConfirm: async () => {
+        try {
+          const success = await db.deletePenduduk(id, currentUser);
+          if (success) {
+            addToast("Data penduduk berhasil dihapus.", "success");
+            fetchData();
+          } else {
+            addToast("Data penduduk tidak ditemukan.", "warning");
+          }
+        } catch (err: any) {
+          addToast(err.message || "Gagal menghapus data penduduk.", "error");
+        }
       }
-    } catch (err: any) {
-      addToast(err.message || "Gagal menghapus data penduduk.", "error");
-    }
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -373,13 +395,15 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
                 value={filterRw}
                 onChange={(e) => {
                   setFilterRw(e.target.value);
+                  setFilterRt("");
                   setCurrentPage(1);
                 }}
                 className="bg-transparent text-xs font-bold text-slate-750 dark:text-slate-200 focus:outline-none pr-1 select-none"
               >
                 <option value="">Semua RW</option>
-                <option value="01">RW 01</option>
-                <option value="02">RW 02</option>
+                {Array.from(new Set([...db.getRwList(), "01", "02"])).sort((a,b) => a.localeCompare(b)).map(rwNum => (
+                  <option key={rwNum} value={rwNum}>RW {rwNum}</option>
+                ))}
               </select>
             </div>
           )}
@@ -397,9 +421,9 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
                 className="bg-transparent text-xs font-bold text-slate-750 dark:text-slate-200 focus:outline-none pr-1 select-none"
               >
                 <option value="">Semua RT</option>
-                <option value="01">RT 01</option>
-                <option value="02">RT 02</option>
-                <option value="03">RT 03</option>
+                {Array.from(new Set([...db.getRtList(currentUser.role === "KETUA_RW" ? currentUser.rw : filterRw), "01", "02", "03"])).sort((a,b) => a.localeCompare(b)).map(rtNum => (
+                  <option key={rtNum} value={rtNum}>RT {rtNum}</option>
+                ))}
               </select>
             </div>
           )}
@@ -980,11 +1004,19 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
                   {currentUser.role === "ADMIN_DESA" ? (
                     <select
                       value={rw}
-                      onChange={(e) => setRw(e.target.value)}
+                      onChange={(e) => {
+                        const newRw = e.target.value;
+                        setRw(newRw);
+                        const dynamicRts = Array.from(new Set([...db.getRtList(newRw), "01", "02", "03"])).sort((a,b) => a.localeCompare(b));
+                        if (dynamicRts.length > 0) {
+                          setRt(dynamicRts[0]);
+                        }
+                      }}
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/20 text-xs text-slate-850 dark:text-slate-100 focus:outline-none"
                     >
-                      <option value="01">01</option>
-                      <option value="02">02</option>
+                      {Array.from(new Set([...db.getRwList(), "01", "02"])).sort((a,b) => a.localeCompare(b)).map(rwNum => (
+                        <option key={rwNum} value={rwNum}>{rwNum}</option>
+                      ))}
                     </select>
                   ) : (
                     <input
@@ -1011,9 +1043,9 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
                       onChange={(e) => setRt(e.target.value)}
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/20 text-xs text-slate-850 dark:text-slate-100 focus:outline-none"
                     >
-                      <option value="01">01</option>
-                      <option value="02">02</option>
-                      <option value="03">03</option>
+                      {Array.from(new Set([...db.getRtList(currentUser.role === "KETUA_RW" ? currentUser.rw : rw), "01", "02", "03"])).sort((a,b) => a.localeCompare(b)).map(rtNum => (
+                        <option key={rtNum} value={rtNum}>{rtNum}</option>
+                      ))}
                     </select>
                   )}
                 </div>
@@ -1140,6 +1172,35 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Custom Confirmation Modal */}
+      {confirmModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[9999]">
+          <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-2xl max-w-sm w-full p-6 shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-sm font-extrabold text-slate-800 dark:text-white uppercase tracking-wider">{confirmModal.title}</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">{confirmModal.message}</p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+                className="px-3.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs font-bold rounded-xl transition"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  confirmModal.onConfirm();
+                  setConfirmModal({ ...confirmModal, isOpen: false });
+                }}
+                className="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl transition cursor-pointer"
+              >
+                Ya, Hapus
+              </button>
+            </div>
           </div>
         </div>
       )}

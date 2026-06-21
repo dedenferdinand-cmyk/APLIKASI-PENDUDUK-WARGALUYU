@@ -56,6 +56,19 @@ export default function UserManagementView({ currentUser, addToast }: UserManage
   const [editingDusunId, setEditingDusunId] = useState<string | null>(null);
   const [editingDusunNama, setEditingDusunNama] = useState("");
 
+  // Custom Confirmation Modal state to bypass browser window.confirm constraints inside sandboxed iframes
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: () => {}
+  });
+
   useEffect(() => {
     if (currentUser.role === "ADMIN_DESA") {
       fetchUsers();
@@ -99,18 +112,24 @@ export default function UserManagementView({ currentUser, addToast }: UserManage
       return;
     }
 
-    const confirm = window.confirm(`Apakah Anda yakin ingin menghapus akun operator: ${targetNama}?`);
-    if (!confirm) return;
-
-    try {
-      const success = db.deleteUser(userId, currentUser);
-      if (success) {
-        addToast("Operator telah berhasil dihapus dari sistem.", "success");
-        fetchUsers();
+    setConfirmModal({
+      isOpen: true,
+      title: "Konfirmasi Hapus Akun",
+      message: `Apakah Anda yakin ingin menghapus akun operator "${targetNama}"?`,
+      onConfirm: () => {
+        try {
+          const success = db.deleteUser(userId, currentUser);
+          if (success) {
+            addToast("Operator telah berhasil dihapus dari sistem.", "success");
+            fetchUsers();
+          } else {
+            addToast("User tidak ditemukan atau gagal dihapus.", "warning");
+          }
+        } catch (err: any) {
+          addToast(err.message || "Gagal menghapus user.", "error");
+        }
       }
-    } catch (err: any) {
-      addToast(err.message || "Gagal menghapus user.", "error");
-    }
+    });
   };
 
   // Open form for adding user
@@ -243,13 +262,22 @@ export default function UserManagementView({ currentUser, addToast }: UserManage
         return;
       }
 
-      const confirm = window.confirm(`Apakah Anda yakin ingin menghapus wilayah ${namaDusun}?`);
-      if (!confirm) return;
-
-      const list = wilayahList.filter(d => d.id !== dusunId);
-      db.saveWilayah(list, currentUser);
-      fetchWilayah();
-      addToast(`Wilayah ${namaDusun} didelete dari draf sistem.`, "success");
+      setConfirmModal({
+        isOpen: true,
+        title: "Konfirmasi Hapus Dusun",
+        message: `Apakah Anda yakin ingin menghapus wilayah Dusun "${namaDusun}" dari konfigurasi sistem?`,
+        onConfirm: () => {
+          try {
+            const list = wilayahList.filter(d => d.id !== dusunId);
+            db.saveWilayah(list, currentUser);
+            fetchWilayah();
+            addToast(`Wilayah ${namaDusun} didelete dari draf sistem.`, "success");
+          } catch (err: any) {
+            console.error(err);
+            addToast(`Gagal menghapus Dusun: ${err.message || err}`, "error");
+          }
+        }
+      });
     } catch (err: any) {
       console.error(err);
       addToast(`Gagal menghapus Dusun: ${err.message || err}`, "error");
@@ -296,27 +324,31 @@ export default function UserManagementView({ currentUser, addToast }: UserManage
   };
 
   const handleDeleteRw = (dusunId: string, rwId: string, nomorRw: string) => {
-    try {
-      const confirm = window.confirm(`Apakah Anda yakin ingin menghapus RW ${nomorRw} beserta seluruh RT di dalamnya?`);
-      if (!confirm) return;
+    setConfirmModal({
+      isOpen: true,
+      title: "Konfirmasi Hapus RW",
+      message: `Apakah Anda yakin ingin menghapus RW ${nomorRw} beserta seluruh RT di dalamnya?`,
+      onConfirm: () => {
+        try {
+          const list = wilayahList.map(d => {
+            if (d.id === dusunId) {
+              return {
+                ...d,
+                rws: d.rws.filter(r => r.id !== rwId)
+              };
+            }
+            return d;
+          });
 
-      const list = wilayahList.map(d => {
-        if (d.id === dusunId) {
-          return {
-            ...d,
-            rws: d.rws.filter(r => r.id !== rwId)
-          };
+          db.saveWilayah(list, currentUser);
+          fetchWilayah();
+          addToast(`RW ${nomorRw} berhasil dihapus dari draf area.`, "success");
+        } catch (err: any) {
+          console.error(err);
+          addToast(`Gagal menghapus RW: ${err.message || err}`, "error");
         }
-        return d;
-      });
-
-      db.saveWilayah(list, currentUser);
-      fetchWilayah();
-      addToast(`RW ${nomorRw} berhasil dihapus dari draf area.`, "success");
-    } catch (err: any) {
-      console.error(err);
-      addToast(`Gagal menghapus RW: ${err.message || err}`, "error");
-    }
+      }
+    });
   };
 
   const handleAddRt = (dusunId: string, rwId: string) => {
@@ -890,6 +922,35 @@ export default function UserManagementView({ currentUser, addToast }: UserManage
               </div>
 
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Confirmation Modal */}
+      {confirmModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[9999]">
+          <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-2xl max-w-sm w-full p-6 shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-sm font-extrabold text-slate-800 dark:text-white uppercase tracking-wider">{confirmModal.title}</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">{confirmModal.message}</p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+                className="px-3.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs font-bold rounded-xl transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  confirmModal.onConfirm();
+                  setConfirmModal({ ...confirmModal, isOpen: false });
+                }}
+                className="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl transition cursor-pointer"
+              >
+                Ya, Hapus
+              </button>
+            </div>
           </div>
         </div>
       )}

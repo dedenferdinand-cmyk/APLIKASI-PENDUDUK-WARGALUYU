@@ -31,6 +31,19 @@ export default function PengaturanView({ currentUser, addToast, onLogout }: Peng
   const [connectionStatus, setConnectionStatus] = React.useState<{ success: boolean; message: string } | null>(null);
   const [syncStatus, setSyncStatus] = React.useState<{ tableResult: any } | null>(null);
 
+  // Custom Confirmation Modal state to bypass browser window.confirm constraints inside sandboxed iframes
+  const [confirmModal, setConfirmModal] = React.useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: () => {}
+  });
+
   const handleTestConnection = async () => {
     setSupabaseLoading(true);
     setConnectionStatus(null);
@@ -50,48 +63,52 @@ export default function PengaturanView({ currentUser, addToast, onLogout }: Peng
     }
   };
 
-  const handleUploadSupabase = async () => {
-    const confirm = window.confirm(
-      "Apakah Anda yakin ingin MENGUNGGAH seluruh data kependudukan lokal saat ini ke database Supabase Anda?\n\nIni akan melakukan UPSERT (menyisipkan atau memperbarui baris dengan ID yang sama)."
-    );
-    if (!confirm) return;
-
-    setSupabaseLoading(true);
-    try {
-      const res = await db.uploadAllToSupabase();
-      if (res.success) {
-        setSyncStatus({ tableResult: res.details });
-        addToast("Sinkronisasi unggah ke Supabase selesai!", "success");
-      } else {
-        addToast(res.message, "error");
+  const handleUploadSupabase = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Unggah Data ke Supabase",
+      message: "Apakah Anda yakin ingin MENGUNGGAH seluruh data kependudukan lokal saat ini ke database Supabase Anda? Ini akan melakukan UPSERT untuk memperbarui baris dengan ID yang sama di cloud.",
+      onConfirm: async () => {
+        setSupabaseLoading(true);
+        try {
+          const res = await db.uploadAllToSupabase();
+          if (res.success) {
+            setSyncStatus({ tableResult: res.details });
+            addToast("Sinkronisasi unggah ke Supabase selesai!", "success");
+          } else {
+            addToast(res.message, "error");
+          }
+        } catch (e: any) {
+          addToast(e.message || "Gagal mengunggah data.", "error");
+        } finally {
+          setSupabaseLoading(false);
+        }
       }
-    } catch (e: any) {
-      addToast(e.message || "Gagal mengunggah data.", "error");
-    } finally {
-      setSupabaseLoading(false);
-    }
+    });
   };
 
-  const handleDownloadSupabase = async () => {
-    const confirm = window.confirm(
-      "Apakah Anda yakin ingin MENGUNDUH seluruh data dari Supabase Anda?\n\nPERINGATAN: Ini akan menimpa data lokal di perangkat/browser ini berdasarkan entri aktif di cloud!"
-    );
-    if (!confirm) return;
-
-    setSupabaseLoading(true);
-    try {
-      const res = await db.downloadAllFromSupabase();
-      if (res.success) {
-        setSyncStatus({ tableResult: res.details });
-        addToast("Sinkronisasi unduh dari Supabase berhasil diterapkan!", "success");
-      } else {
-        addToast(res.message, "error");
+  const handleDownloadSupabase = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Unduh Data dari Supabase",
+      message: "Apakah Anda yakin ingin MENGUNDUH seluruh data dari Supabase Anda? PERINGATAN: Ini akan menimpa seluruh data lokal di perangkat/browser ini berdasarkan entri aktif di cloud!",
+      onConfirm: async () => {
+        setSupabaseLoading(true);
+        try {
+          const res = await db.downloadAllFromSupabase();
+          if (res.success) {
+            setSyncStatus({ tableResult: res.details });
+            addToast("Sinkronisasi unduh dari Supabase berhasil diterapkan!", "success");
+          } else {
+            addToast(res.message, "error");
+          }
+        } catch (e: any) {
+          addToast(e.message || "Gagal mengunduh data.", "error");
+        } finally {
+          setSupabaseLoading(false);
+        }
       }
-    } catch (e: any) {
-      addToast(e.message || "Gagal mengunduh data.", "error");
-    } finally {
-      setSupabaseLoading(false);
-    }
+    });
   };
   
   const handleResetDatabase = () => {
@@ -100,22 +117,24 @@ export default function PengaturanView({ currentUser, addToast, onLogout }: Peng
       return;
     }
 
-    const confirm = window.confirm(
-      "WARNING: Anda akan menimpa seluruh entri arsip kependudukan, KK, kelahiran, mutasi, dan log audit saat ini kembali ke draf default bawaan pabrik!\n\nLanjutkan pembersihan database?"
-    );
-    if (!confirm) return;
-
-    try {
-      db.resetDatabase(currentUser);
-      addToast("Database kependudukan berhasil di-reset ke kondisi awal!", "success");
-      // Trigger simple logout so session recreates with fresh data
-      setTimeout(() => {
-        onLogout();
-        addToast("Sesi di-reset. Silakan masuk kembali.", "info");
-      }, 1000);
-    } catch (err: any) {
-      addToast("Gagal mereset database: " + err.message, "error");
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: "Bersihkan Database Kependudukan",
+      message: "WARNING: Anda akan menimpa seluruh entri arsip kependudukan, KK, kelahiran, mutasi, dan log audit saat ini kembali ke draf default bawaan pabrik! Lanjutkan pembersihan database?",
+      onConfirm: () => {
+        try {
+          db.resetDatabase(currentUser);
+          addToast("Database kependudukan berhasil di-reset ke kondisi awal!", "success");
+          // Trigger simple logout so session recreates with fresh data
+          setTimeout(() => {
+            onLogout();
+            addToast("Sesi di-reset. Silakan masuk kembali.", "info");
+          }, 1000);
+        } catch (e: any) {
+          addToast(e.message || "Gagal mereset database.", "error");
+        }
+      }
+    });
   };
 
   return (
@@ -349,6 +368,35 @@ export default function PengaturanView({ currentUser, addToast, onLogout }: Peng
           </div>
         </div>
       </div>
+
+      {/* Custom Confirmation Modal */}
+      {confirmModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[9999]">
+          <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-2xl max-w-sm w-full p-6 shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-sm font-extrabold text-slate-800 dark:text-white uppercase tracking-wider">{confirmModal.title}</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">{confirmModal.message}</p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+                className="px-3.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs font-bold rounded-xl transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  confirmModal.onConfirm();
+                  setConfirmModal({ ...confirmModal, isOpen: false });
+                }}
+                className="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl transition cursor-pointer"
+              >
+                Ya, Lanjutkan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
