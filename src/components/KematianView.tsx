@@ -60,6 +60,14 @@ export default function KematianView({ currentUser, addToast }: KematianViewProp
 
   useEffect(() => {
     fetchData();
+
+    const handleSync = () => {
+      fetchData();
+    };
+    window.addEventListener("sipenduk-db-updated", handleSync);
+    return () => {
+      window.removeEventListener("sipenduk-db-updated", handleSync);
+    };
   }, [currentUser]);
 
   const fetchData = async () => {

@@ -63,6 +63,14 @@ export default function KelahiranView({ currentUser, addToast }: KelahiranViewPr
 
   useEffect(() => {
     fetchData();
+
+    const handleSync = () => {
+      fetchData();
+    };
+    window.addEventListener("sipenduk-db-updated", handleSync);
+    return () => {
+      window.removeEventListener("sipenduk-db-updated", handleSync);
+    };
   }, [currentUser]);
 
   const fetchData = async () => {

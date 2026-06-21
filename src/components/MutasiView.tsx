@@ -65,6 +65,14 @@ export default function MutasiView({ currentUser, addToast }: MutasiViewProps) {
 
   useEffect(() => {
     fetchData();
+
+    const handleSync = () => {
+      fetchData();
+    };
+    window.addEventListener("sipenduk-db-updated", handleSync);
+    return () => {
+      window.removeEventListener("sipenduk-db-updated", handleSync);
+    };
   }, [currentUser]);
 
   const fetchData = async () => {

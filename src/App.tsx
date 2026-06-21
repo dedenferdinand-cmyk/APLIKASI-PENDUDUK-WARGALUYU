@@ -76,6 +76,36 @@ export default function App() {
     }
   }, []);
 
+  // Background Automatic Real-Time Sync Daemon
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const initialSync = async () => {
+      try {
+        const success = await db.syncAll(true);
+        if (success) {
+          window.dispatchEvent(new CustomEvent("sipenduk-db-updated"));
+        }
+      } catch (err) {
+        console.warn("[App Background Sync Error] Initial fetch failed:", err);
+      }
+    };
+    initialSync();
+
+    const intervalId = setInterval(async () => {
+      try {
+        const success = await db.syncAll(true);
+        if (success) {
+          window.dispatchEvent(new CustomEvent("sipenduk-db-updated"));
+        }
+      } catch (err) {
+        console.warn("[App Background Sync Error] Background interval sync failed:", err);
+      }
+    }, 6000);
+
+    return () => clearInterval(intervalId);
+  }, [currentUser]);
+
   const handleLoginSuccess = (user: UserType) => {
     setCurrentUser(user);
     addToast(`Autentikasi Berhasil! Selamat datang di SIPENDUK, ${user.nama}.`, "success");

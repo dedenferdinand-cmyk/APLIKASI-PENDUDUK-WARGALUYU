@@ -74,6 +74,17 @@ export default function UserManagementView({ currentUser, addToast }: UserManage
       fetchUsers();
       fetchWilayah();
     }
+
+    const handleSync = () => {
+      if (currentUser.role === "ADMIN_DESA") {
+        fetchUsers();
+        fetchWilayah();
+      }
+    };
+    window.addEventListener("sipenduk-db-updated", handleSync);
+    return () => {
+      window.removeEventListener("sipenduk-db-updated", handleSync);
+    };
   }, [currentUser]);
 
   const fetchUsers = () => {

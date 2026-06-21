@@ -49,6 +49,14 @@ export default function DashboardView({ currentUser, addToast, onNavigate }: Das
 
   useEffect(() => {
     fetchDashboardData();
+
+    const handleSync = () => {
+      fetchDashboardData();
+    };
+    window.addEventListener("sipenduk-db-updated", handleSync);
+    return () => {
+      window.removeEventListener("sipenduk-db-updated", handleSync);
+    };
   }, [currentUser]);
 
   const fetchDashboardData = async () => {
