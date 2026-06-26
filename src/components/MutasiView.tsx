@@ -18,7 +18,7 @@ import {
   MapPin,
   HelpCircle
 } from "lucide-react";
-import { User, Mutasi, TipeMutasi } from "../types";
+import { User, Mutasi, TipeMutasi, Penduduk } from "../types";
 import { db } from "../db/mockSupabase";
 
 interface MutasiViewProps {
@@ -28,6 +28,7 @@ interface MutasiViewProps {
 
 export default function MutasiView({ currentUser, addToast }: MutasiViewProps) {
   const [mutasiList, setMutasiList] = useState<Mutasi[]>([]);
+  const [allPenduduk, setAllPenduduk] = useState<Penduduk[]>([]);
 
   // Search and Filter states
   const [searchQuery, setSearchQuery] = useState("");
@@ -49,6 +50,11 @@ export default function MutasiView({ currentUser, addToast }: MutasiViewProps) {
   const [tanggalMutasi, setTanggalMutasi] = useState("");
   const [rw, setRw] = useState("");
   const [rt, setRt] = useState("");
+
+  // Search Citizen states (For Mutasi Keluar)
+  const [searchPendudukQuery, setSearchPendudukQuery] = useState("");
+  const [selectedPenduduk, setSelectedPenduduk] = useState<Penduduk | null>(null);
+  const [pilihanPindah, setPilihanPindah] = useState<"SEMUA" | "ANGGOTA">("ANGGOTA");
 
   // Custom Confirmation Modal state to bypass browser window.confirm constraints inside sandboxed iframes
   const [confirmModal, setConfirmModal] = useState<{
@@ -79,10 +85,25 @@ export default function MutasiView({ currentUser, addToast }: MutasiViewProps) {
     try {
       const data = await db.getMutasi(currentUser);
       setMutasiList(data);
+
+      const pData = await db.getPenduduk(currentUser);
+      setAllPenduduk(pData);
     } catch (err: any) {
       addToast("Gagal memuat log mutasi: " + err.message, "error");
     }
   };
+
+  // Keep alamatTujuan (for Datang) and alamatAsal (for Pindah) in sync with RT & RW automatically
+  useEffect(() => {
+    if (!isFormOpen) return;
+
+    const formattedRtRw = `RT ${rt.padStart(2, "0")} / RW ${rw.padStart(2, "0")}, Desa Wargaluyu`;
+    if (jenisMutasi === "Datang") {
+      setAlamatTujuan(formattedRtRw);
+    } else if (jenisMutasi === "Pindah") {
+      setAlamatAsal(formattedRtRw);
+    }
+  }, [jenisMutasi, rt, rw, isFormOpen]);
 
   const openInsertForm = () => {
     setJenisMutasi("Datang");
@@ -91,6 +112,9 @@ export default function MutasiView({ currentUser, addToast }: MutasiViewProps) {
     setAlamatAsal("");
     setAlamatTujuan("");
     setTanggalMutasi(new Date().toISOString().split("T")[0]);
+    setSearchPendudukQuery("");
+    setSelectedPenduduk(null);
+    setPilihanPindah("ANGGOTA");
     
     const dynamicRwList = Array.from(new Set([...db.getRwList(), "01", "02"])).sort((a,b) => a.localeCompare(b));
     const defaultRw = dynamicRwList[0] || "01";
@@ -109,6 +133,19 @@ export default function MutasiView({ currentUser, addToast }: MutasiViewProps) {
     }
 
     setIsFormOpen(true);
+  };
+
+  const handleSelectPenduduk = (p: Penduduk) => {
+    setSelectedPenduduk(p);
+    setNik(p.nik);
+    setNama(p.namaLengkap);
+    setSearchPendudukQuery("");
+  };
+
+  const handleClearSelectedPenduduk = () => {
+    setSelectedPenduduk(null);
+    setNik("");
+    setNama("");
   };
 
   const handleDelete = (id: string) => {
@@ -135,6 +172,11 @@ export default function MutasiView({ currentUser, addToast }: MutasiViewProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (jenisMutasi === "Pindah" && !selectedPenduduk) {
+      addToast("Harap pilih warga yang akan pindah / keluar terlebih dahulu dari pencarian!", "warning");
+      return;
+    }
+
     if (nik.length !== 16 || !/^\d+$/.test(nik)) {
       addToast("NIK warga mutasi wajib 16 digit angka!", "warning");
       return;
@@ -158,6 +200,28 @@ export default function MutasiView({ currentUser, addToast }: MutasiViewProps) {
 
     try {
       await db.insertMutasi(payload, currentUser);
+
+      // Automated Cleanup/Deletion of migrated citizens in local storage & Supabase
+      if (jenisMutasi === "Pindah" && selectedPenduduk) {
+        if (pilihanPindah === "SEMUA") {
+          const noKkToDelete = selectedPenduduk.noKk;
+          const familyMembers = allPenduduk.filter(p => p.noKk === noKkToDelete);
+          for (const member of familyMembers) {
+            await db.deletePenduduk(member.id, currentUser);
+          }
+          // Also delete Keluarga record
+          const keluargaList = await db.getKeluarga(currentUser);
+          const targetKeluarga = keluargaList.find(k => k.noKk === noKkToDelete);
+          if (targetKeluarga) {
+            await db.deleteKeluarga(targetKeluarga.id, currentUser);
+          }
+          addToast(`Warga & seluruh keluarga (${familyMembers.length} jiwa) dikeluarkan otomatis dari KK No. ${noKkToDelete} karena pindah.`, "info");
+        } else {
+          await db.deletePenduduk(selectedPenduduk.id, currentUser);
+          addToast(`Warga ${selectedPenduduk.namaLengkap} berhasil dikeluarkan otomatis dari basis data RT karena pindah.`, "info");
+        }
+      }
+
       addToast(`Log mutasi [${jenisMutasi}] warga ${nama} sukses disimpan.`, "success");
       setIsFormOpen(false);
       fetchData();
@@ -184,6 +248,18 @@ export default function MutasiView({ currentUser, addToast }: MutasiViewProps) {
   // Pages
   const totalPages = Math.ceil(filteredList.length / itemsPerPage) || 1;
   const paginatedList = filteredList.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  // Filter selectable residents for Mutasi Keluar by form's selected RT and RW
+  const selectablePenduduk = allPenduduk.filter(p => {
+    const formattedRt = rt.padStart(2, "0");
+    const formattedRw = rw.padStart(2, "0");
+    const matchesRtRw = p.rt.padStart(2, "0") === formattedRt && p.rw.padStart(2, "0") === formattedRw;
+    if (!matchesRtRw) return false;
+
+    if (!searchPendudukQuery.trim()) return true;
+    const q = searchPendudukQuery.toLowerCase();
+    return p.namaLengkap.toLowerCase().includes(q) || p.nik.includes(q);
+  });
 
   return (
     <div className="space-y-6">
@@ -429,53 +505,177 @@ export default function MutasiView({ currentUser, addToast }: MutasiViewProps) {
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nomor NIK KTP Warga (16 Digit)</label>
-                <input
-                  type="text"
-                  maxLength={16}
-                  required
-                  placeholder="3204XXXXXXXXXXXXXXXX"
-                  value={nik}
-                  onChange={(e) => setNik(e.target.value.replace(/\D/g, ""))}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/20 text-xs font-mono tracking-wider text-slate-800 dark:text-slate-100 focus:outline-none"
-                />
+              {/* Conditional Input: Search resident (For Mutasi Keluar) vs Manual entry (For Mutasi Masuk) */}
+              {jenisMutasi === "Pindah" ? (
+                <div className="space-y-3 bg-slate-50 dark:bg-slate-950/20 p-4.5 rounded-2xl border border-slate-150 dark:border-slate-800/80">
+                  <div className="space-y-1.5 relative">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                      Cari Penduduk Keluar (RT {rt} / RW {rw})
+                    </label>
+                    
+                    {!selectedPenduduk ? (
+                      <div>
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                          <input
+                            type="text"
+                            placeholder="Ketik Nama Lengkap atau NIK warga..."
+                            value={searchPendudukQuery}
+                            onChange={(e) => setSearchPendudukQuery(e.target.value)}
+                            className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs text-slate-850 dark:text-slate-100 focus:outline-none"
+                          />
+                        </div>
+
+                        {/* Dropdown search results */}
+                        {searchPendudukQuery.trim() !== "" && (
+                          <div className="absolute left-0 right-0 mt-1 max-h-[160px] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-[60] divide-y divide-slate-100 dark:divide-slate-800">
+                            {selectablePenduduk.length > 0 ? (
+                              selectablePenduduk.slice(0, 5).map(p => (
+                                <button
+                                  key={p.id}
+                                  type="button"
+                                  onClick={() => handleSelectPenduduk(p)}
+                                  className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors flex flex-col gap-0.5 text-xs cursor-pointer"
+                                >
+                                  <span className="font-bold text-slate-800 dark:text-slate-200">{p.namaLengkap}</span>
+                                  <span className="text-[10px] font-mono font-semibold text-slate-450 dark:text-slate-500">NIK: {p.nik} | KK: {p.noKk}</span>
+                                </button>
+                              ))
+                            ) : (
+                              <div className="px-3 py-3 text-center text-[11px] text-slate-400">
+                                Warga tidak ditemukan di RT {rt}/RW {rw}.
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/85 rounded-xl flex items-center justify-between">
+                        <div className="space-y-0.5 text-left">
+                          <p className="font-bold text-slate-800 dark:text-slate-100 text-xs">{selectedPenduduk.namaLengkap}</p>
+                          <p className="text-[10px] font-mono text-slate-400 dark:text-slate-500">NIK: {selectedPenduduk.nik}</p>
+                          <p className="text-[10px] font-mono text-slate-400 dark:text-slate-500">KK: {selectedPenduduk.noKk}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleClearSelectedPenduduk}
+                          className="px-2 py-1 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/20 dark:hover:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-lg text-[10px] font-extrabold transition-colors flex items-center gap-1 cursor-pointer"
+                        >
+                          <X className="w-3 h-3" /> Ganti
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {selectedPenduduk && (
+                    <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800/60 animate-in fade-in slide-in-from-top-1 duration-150">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block text-left">
+                        Skema Perpindahan Keluarga
+                      </label>
+                      <div className="grid grid-cols-2 gap-2 text-left">
+                        <button
+                          type="button"
+                          onClick={() => setPilihanPindah("ANGGOTA")}
+                          className={`py-2 px-3 rounded-xl border text-[11px] font-bold text-left leading-tight transition-all cursor-pointer ${
+                            pilihanPindah === "ANGGOTA"
+                              ? "bg-blue-600/10 border-blue-500 text-blue-700 dark:text-blue-400 shadow-sm"
+                              : "border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900"
+                          }`}
+                        >
+                          <p className="font-extrabold">Hanya Warga Ini</p>
+                          <span className="text-[9px] opacity-75 font-normal block mt-0.5">Satu orang saja yang keluar</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPilihanPindah("SEMUA")}
+                          className={`py-2 px-3 rounded-xl border text-[11px] font-bold text-left leading-tight transition-all cursor-pointer ${
+                            pilihanPindah === "SEMUA"
+                              ? "bg-amber-600/10 border-amber-500 text-amber-700 dark:text-amber-400 shadow-sm"
+                              : "border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900"
+                          }`}
+                        >
+                          <p className="font-extrabold">Seluruh Keluarga (KK)</p>
+                          <span className="text-[9px] opacity-75 font-normal block mt-0.5">Ikut memindahkan satu KK</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-1.5 text-left">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nomor NIK KTP Warga (16 Digit)</label>
+                    <input
+                      type="text"
+                      maxLength={16}
+                      required
+                      placeholder="3204XXXXXXXXXXXXXXXX"
+                      value={nik}
+                      onChange={(e) => setNik(e.target.value.replace(/\D/g, ""))}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/20 text-xs font-mono tracking-wider text-slate-800 dark:text-slate-100 focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5 text-left">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nama Lengkap Kepala Mutasi</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Nama lengkap warga terkait"
+                      value={nama}
+                      onChange={(e) => setNama(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/20 text-xs text-slate-800 dark:text-slate-100 focus:outline-none"
+                    />
+                  </div>
+                </>
+              )}
+
+              <div className="space-y-1.5 text-left">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Alamat Tempat Asal</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    disabled={jenisMutasi === "Pindah" && currentUser.role !== "ADMIN_DESA"}
+                    placeholder="Kota asal / RT / RW lama..."
+                    value={alamatAsal}
+                    onChange={(e) => setAlamatAsal(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-xl border text-xs text-slate-800 dark:text-slate-100 focus:outline-none transition-all ${
+                      jenisMutasi === "Pindah" && currentUser.role !== "ADMIN_DESA"
+                        ? "bg-slate-100 dark:bg-slate-950/60 border-slate-200 dark:border-slate-850 text-slate-400 cursor-not-allowed select-none opacity-80"
+                        : "border-slate-200 dark:border-slate-800 bg-slate-105/40 dark:bg-slate-950/20"
+                    }`}
+                  />
+                  {jenisMutasi === "Pindah" && currentUser.role !== "ADMIN_DESA" && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-extrabold text-slate-450 dark:text-slate-500 uppercase tracking-widest bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded-md flex items-center gap-0.5 select-none">
+                      🔒 Terkunci
+                    </span>
+                  )}
+                </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nama Lengkap Kepala Mutasi</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Nama lengkap warga terkait"
-                  value={nama}
-                  onChange={(e) => setNama(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/20 text-xs text-slate-800 dark:text-slate-100 focus:outline-none"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Alamat Tempat Asal</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Kota asal / RT / RW lama..."
-                  value={alamatAsal}
-                  onChange={(e) => setAlamatAsal(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/20 text-xs text-slate-800 dark:text-slate-100 focus:outline-none"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Alamat Tempat Tujuan baru</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Nama jalan / Kampung Wargaluyu rt..."
-                  value={alamatTujuan}
-                  onChange={(e) => setAlamatTujuan(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/20 text-xs text-slate-800 dark:text-slate-100 focus:outline-none"
-                />
+              <div className="space-y-1.5 text-left">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Alamat Tempat Tujuan baru</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    disabled={jenisMutasi === "Datang" && currentUser.role !== "ADMIN_DESA"}
+                    placeholder="Nama jalan / Kampung Wargaluyu rt..."
+                    value={alamatTujuan}
+                    onChange={(e) => setAlamatTujuan(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-xl border text-xs text-slate-800 dark:text-slate-100 focus:outline-none transition-all ${
+                      jenisMutasi === "Datang" && currentUser.role !== "ADMIN_DESA"
+                        ? "bg-slate-100 dark:bg-slate-950/60 border-slate-200 dark:border-slate-850 text-slate-400 cursor-not-allowed select-none opacity-80"
+                        : "border-slate-200 dark:border-slate-800 bg-slate-105/40 dark:bg-slate-950/20"
+                    }`}
+                  />
+                  {jenisMutasi === "Datang" && currentUser.role !== "ADMIN_DESA" && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-extrabold text-slate-450 dark:text-slate-500 uppercase tracking-widest bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded-md flex items-center gap-0.5 select-none">
+                      🔒 Terkunci
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-3 gap-3">

@@ -16,7 +16,7 @@ import {
   AlertTriangle,
   Info
 } from "lucide-react";
-import { User, Kematian } from "../types";
+import { User, Kematian, Penduduk } from "../types";
 import { db } from "../db/mockSupabase";
 
 interface KematianViewProps {
@@ -26,11 +26,16 @@ interface KematianViewProps {
 
 export default function KematianView({ currentUser, addToast }: KematianViewProps) {
   const [kematianList, setKematianList] = useState<Kematian[]>([]);
+  const [allPenduduk, setAllPenduduk] = useState<Penduduk[]>([]);
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [filterRw, setFilterRw] = useState("");
   const [filterRt, setFilterRt] = useState("");
+
+  // Search Citizen states
+  const [searchPendudukQuery, setSearchPendudukQuery] = useState("");
+  const [selectedPenduduk, setSelectedPenduduk] = useState<Penduduk | null>(null);
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -74,6 +79,9 @@ export default function KematianView({ currentUser, addToast }: KematianViewProp
     try {
       const data = await db.getKematian(currentUser);
       setKematianList(data);
+
+      const pData = await db.getPenduduk(currentUser);
+      setAllPenduduk(pData);
     } catch (err: any) {
       addToast("Gagal memuat catatan kematian: " + err.message, "error");
     }
@@ -84,6 +92,8 @@ export default function KematianView({ currentUser, addToast }: KematianViewProp
     setNama("");
     setTanggalMeninggal(new Date().toISOString().split("T")[0]);
     setSebabKematian("Sakit Tua");
+    setSearchPendudukQuery("");
+    setSelectedPenduduk(null);
     
     const dynamicRwList = Array.from(new Set([...db.getRwList(), "01", "02"])).sort((a,b) => a.localeCompare(b));
     const defaultRw = dynamicRwList[0] || "01";
@@ -102,6 +112,19 @@ export default function KematianView({ currentUser, addToast }: KematianViewProp
     }
 
     setIsFormOpen(true);
+  };
+
+  const handleSelectPenduduk = (p: Penduduk) => {
+    setSelectedPenduduk(p);
+    setNik(p.nik);
+    setNama(p.namaLengkap);
+    setSearchPendudukQuery("");
+  };
+
+  const handleClearSelectedPenduduk = () => {
+    setSelectedPenduduk(null);
+    setNik("");
+    setNama("");
   };
 
   const handleDelete = (id: string) => {
@@ -128,6 +151,12 @@ export default function KematianView({ currentUser, addToast }: KematianViewProp
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!selectedPenduduk && currentUser.role !== "ADMIN_DESA") {
+      // For RT/RW, we enforce picking an existing resident
+      addToast("Harap cari dan pilih warga yang meninggal dari data penduduk!", "warning");
+      return;
+    }
+
     if (nik.length !== 16 || !/^\d+$/.test(nik)) {
       addToast("NIK harus 16 digit angka!", "warning");
       return;
@@ -149,7 +178,19 @@ export default function KematianView({ currentUser, addToast }: KematianViewProp
 
     try {
       await db.insertKematian(payload, currentUser);
-      addToast(`Catatan kematian warga ${nama} berhasil diregistrasikan.`, "success");
+      
+      // Auto-delete deceased resident from active residents to clean up lists
+      if (selectedPenduduk) {
+        await db.deletePenduduk(selectedPenduduk.id, currentUser);
+      } else {
+        // Fallback: If NIK matched an active resident, remove them too
+        const activeResident = allPenduduk.find(p => p.nik === nik);
+        if (activeResident) {
+          await db.deletePenduduk(activeResident.id, currentUser);
+        }
+      }
+
+      addToast(`Catatan kematian warga ${nama} berhasil diregistrasikan dan dikeluarkan dari data penduduk aktif.`, "success");
       setIsFormOpen(false);
       fetchData();
     } catch (err: any) {
@@ -173,6 +214,18 @@ export default function KematianView({ currentUser, addToast }: KematianViewProp
   // Pages
   const totalPages = Math.ceil(filteredList.length / itemsPerPage) || 1;
   const paginatedList = filteredList.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  // Filter selectable residents for death registry by target RT and RW
+  const selectablePenduduk = allPenduduk.filter(p => {
+    const formattedRt = rt.padStart(2, "0");
+    const formattedRw = rw.padStart(2, "0");
+    const matchesRtRw = p.rt.padStart(2, "0") === formattedRt && p.rw.padStart(2, "0") === formattedRw;
+    if (!matchesRtRw) return false;
+
+    if (!searchPendudukQuery.trim()) return true;
+    const q = searchPendudukQuery.toLowerCase();
+    return p.namaLengkap.toLowerCase().includes(q) || p.nik.includes(q);
+  });
 
   return (
     <div className="space-y-6">
@@ -360,30 +413,99 @@ export default function KematianView({ currentUser, addToast }: KematianViewProp
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nomor NIK KTP Warga (16 Digit)</label>
-                <input
-                  type="text"
-                  maxLength={16}
-                  required
-                  placeholder="3204XXXXXXXXXXXXXXXX"
-                  value={nik}
-                  onChange={(e) => setNik(e.target.value.replace(/\D/g, ""))}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/20 text-xs font-mono tracking-widest text-slate-805 dark:text-slate-100 focus:outline-none"
-                />
+              {/* Resident Search Component */}
+              <div className="space-y-3 bg-slate-50 dark:bg-slate-950/20 p-4 rounded-2xl border border-slate-150 dark:border-slate-800/80">
+                <div className="space-y-1.5 relative">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                    Cari Warga Meninggal (RT {rt} / RW {rw})
+                  </label>
+                  
+                  {!selectedPenduduk ? (
+                    <div>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="Ketik Nama Lengkap atau NIK warga..."
+                          value={searchPendudukQuery}
+                          onChange={(e) => setSearchPendudukQuery(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs text-slate-850 dark:text-slate-100 focus:outline-none"
+                        />
+                      </div>
+
+                      {/* Dropdown search results */}
+                      {searchPendudukQuery.trim() !== "" && (
+                        <div className="absolute left-0 right-0 mt-1 max-h-[160px] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-50 divide-y divide-slate-100 dark:divide-slate-800">
+                          {selectablePenduduk.length > 0 ? (
+                            selectablePenduduk.slice(0, 5).map(p => (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => handleSelectPenduduk(p)}
+                                className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors flex flex-col gap-0.5 text-xs cursor-pointer"
+                              >
+                                <span className="font-bold text-slate-800 dark:text-slate-200">{p.namaLengkap}</span>
+                                <span className="text-[10px] font-mono font-semibold text-slate-450 dark:text-slate-500">NIK: {p.nik} | KK: {p.noKk}</span>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="px-3 py-3 text-center text-[11px] text-slate-400">
+                              Warga tidak ditemukan di RT {rt}/RW {rw}.
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/85 rounded-xl flex items-center justify-between">
+                      <div className="space-y-0.5 text-left">
+                        <p className="font-bold text-slate-800 dark:text-slate-100 text-xs">{selectedPenduduk.namaLengkap}</p>
+                        <p className="text-[10px] font-mono text-slate-400 dark:text-slate-500">NIK: {selectedPenduduk.nik}</p>
+                        <p className="text-[10px] font-mono text-slate-400 dark:text-slate-500">KK: {selectedPenduduk.noKk}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleClearSelectedPenduduk}
+                        className="px-2 py-1 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/20 dark:hover:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-lg text-[10px] font-extrabold transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        <X className="w-3 h-3" /> Ganti
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nama Lengkap Almarhum / Almarhumah</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Nama warga yang meninggal dunia"
-                  value={nama}
-                  onChange={(e) => setNama(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/20 text-xs text-slate-805 dark:text-slate-100 focus:outline-none"
-                />
-              </div>
+              {/* If Superadmin, allow manual NIK/Name fallback in case they are registering someone not yet in system */}
+              {(currentUser.role === "ADMIN_DESA" || selectedPenduduk) && (
+                <>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nomor NIK KTP Warga (16 Digit)</label>
+                    <input
+                      type="text"
+                      maxLength={16}
+                      required
+                      disabled={!!selectedPenduduk}
+                      placeholder="3204XXXXXXXXXXXXXXXX"
+                      value={nik}
+                      onChange={(e) => setNik(e.target.value.replace(/\D/g, ""))}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/20 text-xs font-mono tracking-widest text-slate-805 dark:text-slate-100 focus:outline-none disabled:opacity-75 disabled:cursor-not-allowed"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nama Lengkap Almarhum / Almarhumah</label>
+                    <input
+                      type="text"
+                      required
+                      disabled={!!selectedPenduduk}
+                      placeholder="Nama warga yang meninggal dunia"
+                      value={nama}
+                      onChange={(e) => setNama(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/20 text-xs text-slate-805 dark:text-slate-100 focus:outline-none disabled:opacity-75 disabled:cursor-not-allowed"
+                    />
+                  </div>
+                </>
+              )}
 
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2 space-y-1.5">

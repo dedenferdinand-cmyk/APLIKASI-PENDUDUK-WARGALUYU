@@ -40,6 +40,7 @@ export default function KelahiranView({ currentUser, addToast }: KelahiranViewPr
 
   // Form states
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [punyaNik, setPunyaNik] = useState<"YA" | "BELUM">("BELUM");
   const [nikBayi, setNikBayi] = useState("");
   const [namaBayi, setNamaBayi] = useState("");
   const [namaAyah, setNamaAyah] = useState("");
@@ -83,6 +84,7 @@ export default function KelahiranView({ currentUser, addToast }: KelahiranViewPr
   };
 
   const openInsertForm = () => {
+    setPunyaNik("BELUM");
     setNikBayi("");
     setNamaBayi("");
     setNamaAyah("");
@@ -137,8 +139,17 @@ export default function KelahiranView({ currentUser, addToast }: KelahiranViewPr
       return;
     }
 
+    if (punyaNik === "YA") {
+      if (nikBayi.length !== 16 || !/^\d+$/.test(nikBayi)) {
+        addToast("Nomor NIK bayi harus 16 digit angka!", "warning");
+        return;
+      }
+    }
+
+    const finalNik = punyaNik === "YA" ? nikBayi.trim() : "";
+
     const payload = {
-      nikBayi: nikBayi.trim() || "3204" + Math.floor(100000000000 + Math.random() * 900000000000).toString(), // auto generate if empty
+      nikBayi: finalNik,
       namaBayi: namaBayi.trim(),
       namaAyah: namaAyah.trim(),
       namaIbu: namaIbu.trim(),
@@ -281,8 +292,16 @@ export default function KelahiranView({ currentUser, addToast }: KelahiranViewPr
                       </div>
                       {k.namaBayi}
                     </td>
-                    <td className="px-5 py-4 font-mono font-semibold text-slate-500 dark:text-slate-400">
-                      {k.nikBayi || "Dalam Proses"}
+                    <td className="px-5 py-4">
+                      {k.nikBayi ? (
+                        <span className="font-mono font-bold text-slate-700 dark:text-slate-200 tracking-wider">
+                          {k.nikBayi}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/15 animate-pulse">
+                          ⚠️ Belum Ada NIK (Harus Update KK)
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-4 text-slate-700 dark:text-slate-350">{k.namaIbu}</td>
                     <td className="px-5 py-4 text-slate-700 dark:text-slate-355">{k.namaAyah}</td>
@@ -360,17 +379,51 @@ export default function KelahiranView({ currentUser, addToast }: KelahiranViewPr
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Prakiraan Nomor NIK (Boleh Kosong)</label>
-                <input
-                  type="text"
-                  maxLength={16}
-                  placeholder="Isi 3204... jika sudah diatur Disduk"
-                  value={nikBayi}
-                  onChange={(e) => setNikBayi(e.target.value.replace(/\D/g, ""))}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/20 text-xs font-mono tracking-wider text-slate-800 dark:text-slate-100 focus:outline-none"
-                />
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Apakah Bayi Sudah Memiliki NIK?</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPunyaNik("YA")}
+                    className={`py-2 px-3 rounded-xl border text-[11px] font-bold text-center transition-all cursor-pointer ${
+                      punyaNik === "YA"
+                        ? "bg-emerald-600/10 border-emerald-500 text-emerald-700 dark:text-emerald-400 shadow-sm"
+                        : "border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900"
+                    }`}
+                  >
+                    Sudah Punya NIK
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPunyaNik("BELUM");
+                      setNikBayi("");
+                    }}
+                    className={`py-2 px-3 rounded-xl border text-[11px] font-bold text-center transition-all cursor-pointer ${
+                      punyaNik === "BELUM"
+                        ? "bg-slate-200 border-slate-400 text-slate-700 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-200 shadow-sm"
+                        : "border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900"
+                    }`}
+                  >
+                    Belum Punya NIK
+                  </button>
+                </div>
               </div>
+
+              {punyaNik === "YA" && (
+                <div className="space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nomor NIK Bayi (16 Digit)</label>
+                  <input
+                    type="text"
+                    maxLength={16}
+                    required
+                    placeholder="Isi 3204XXXXXXXXXXXXXXXX"
+                    value={nikBayi}
+                    onChange={(e) => setNikBayi(e.target.value.replace(/\D/g, ""))}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/20 text-xs font-mono tracking-wider text-slate-800 dark:text-slate-100 focus:outline-none"
+                  />
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nama Bayi Lengkap</label>

@@ -889,6 +889,13 @@ export class MockSupabaseClient {
       throw new Error("RLS Violation! Anda tidak memiliki izin menulis data untuk wilayah RT/RW ini.");
     }
     const raw = this.getItems<Keluarga>(STORAGE_KEYS.KELUARGA);
+
+    // Duplicate KK check
+    const isDuplicate = raw.some(x => x.noKk === kk.noKk);
+    if (isDuplicate) {
+      throw new Error(`Data Ganda! Kartu Keluarga No ${kk.noKk} sudah terdaftar di database.`);
+    }
+
     const newKk: Keluarga = {
       ...kk,
       id: "kk-" + Math.random().toString(36).substring(2, 9),
@@ -910,6 +917,14 @@ export class MockSupabaseClient {
     // Check RLS on both the existing and incoming targets
     if (!this.validateRLSWrite(target, user) || (kk.rw && !this.validateRLSWrite(kk as Keluarga, user))) {
       throw new Error("RLS Violation! Anda tidak memiliki izin mengubah data KK wilayah ini.");
+    }
+
+    // Duplicate KK check on update
+    if (kk.noKk && kk.noKk !== target.noKk) {
+      const isDuplicate = raw.some(x => x.noKk === kk.noKk && x.id !== id);
+      if (isDuplicate) {
+        throw new Error(`Data Ganda! Nomor KK ${kk.noKk} sudah digunakan oleh KK lain.`);
+      }
     }
 
     const updated = { ...target, ...kk };
@@ -948,6 +963,13 @@ export class MockSupabaseClient {
       throw new Error("RLS Violation! Anda tidak memiliki izin menulis data penduduk wilayah RT/RW ini.");
     }
     const raw = this.getItems<Penduduk>(STORAGE_KEYS.PENDUDUK);
+    
+    // Duplicate NIK check
+    const isDuplicate = raw.some(x => x.nik === p.nik);
+    if (isDuplicate) {
+      throw new Error(`Data Ganda! Penduduk dengan NIK ${p.nik} sudah terdaftar di database.`);
+    }
+
     const newP: Penduduk = {
       ...p,
       id: "p-" + Math.random().toString(36).substring(2, 9),
@@ -972,6 +994,14 @@ export class MockSupabaseClient {
 
     if (!this.validateRLSWrite(target, user) || (p.rw && !this.validateRLSWrite(p as Penduduk, user))) {
       throw new Error("RLS Violation! Anda tidak mempunyai izin mengedit data penduduk wilayah ini.");
+    }
+
+    // Duplicate NIK check on update
+    if (p.nik && p.nik !== target.nik) {
+      const isDuplicate = raw.some(x => x.nik === p.nik && x.id !== id);
+      if (isDuplicate) {
+        throw new Error(`Data Ganda! NIK ${p.nik} sudah digunakan oleh penduduk lain.`);
+      }
     }
 
     const oldNoKk = target.noKk;
