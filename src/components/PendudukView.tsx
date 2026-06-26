@@ -75,6 +75,8 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
   const [statusTinggal, setStatusTinggal] = useState<"Tetap" | "Kontrak" | "Sementara">("Tetap");
   const [rw, setRw] = useState("");
   const [rt, setRt] = useState("");
+  const [isDisabilitas, setIsDisabilitas] = useState(false);
+  const [jenisDisabilitas, setJenisDisabilitas] = useState("");
 
   // Citizen Detail Modal state
   const [selectedPenduduk, setSelectedPenduduk] = useState<Penduduk | null>(null);
@@ -131,6 +133,8 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
     setKewarganegaraan("WNI");
     setNoHp("");
     setStatusTinggal("Tetap");
+    setIsDisabilitas(false);
+    setJenisDisabilitas("");
     
     // territorial locks based on operator credentials
     const dynamicRwList = Array.from(new Set([...db.getRwList(), "01", "02"])).sort((a,b) => a.localeCompare(b));
@@ -170,6 +174,8 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
     setStatusTinggal(p.statusTinggal);
     setRw(p.rw);
     setRt(p.rt);
+    setIsDisabilitas(!!p.isDisabilitas);
+    setJenisDisabilitas(p.jenisDisabilitas || "");
     setIsFormOpen(true);
   };
 
@@ -229,6 +235,8 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
       statusTinggal,
       rw: rw.padStart(2, "0"),
       rt: rt.padStart(2, "0"),
+      isDisabilitas,
+      jenisDisabilitas: isDisabilitas ? jenisDisabilitas : "",
       avatar: getCartoonAvatar(jenisKelamin, tanggalLahir, namaLengkap)
     };
 
@@ -1060,6 +1068,51 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
 
               </div>
 
+              {/* Disability Section */}
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-750 dark:text-slate-300">Apakah Warga Menyandang Disabilitas?</label>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Aktifkan jika warga memiliki keterbatasan fisik, intelektual, mental, atau sensorik.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextVal = !isDisabilitas;
+                      setIsDisabilitas(nextVal);
+                      if (!nextVal) setJenisDisabilitas("");
+                    }}
+                    className={`px-4 py-1.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer border ${
+                      isDisabilitas
+                        ? "bg-rose-600/10 border-rose-500 text-rose-700 dark:text-rose-400"
+                        : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-650 dark:text-slate-300"
+                    }`}
+                  >
+                    {isDisabilitas ? "Penyandang Disabilitas" : "Bukan Disabilitas"}
+                  </button>
+                </div>
+
+                {isDisabilitas && (
+                  <div className="space-y-1.5 pt-2 border-t border-slate-200 dark:border-slate-800/60 animate-in fade-in slide-in-from-top-1 duration-150">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block text-left">Jenis Disabilitas</label>
+                    <select
+                      value={jenisDisabilitas}
+                      required={isDisabilitas}
+                      onChange={(e) => setJenisDisabilitas(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs text-slate-850 dark:text-slate-100 focus:outline-none"
+                    >
+                      <option value="">-- Pilih Jenis Disabilitas --</option>
+                      <option value="Disabilitas Fisik">Disabilitas Fisik (Daksa / Lumpuh / dll)</option>
+                      <option value="Disabilitas Intelektual">Disabilitas Intelektual (Down Syndrome / dll)</option>
+                      <option value="Disabilitas Mental">Disabilitas Mental (Schizophrenia / Bipolar / dll)</option>
+                      <option value="Disabilitas Sensorik Netra">Disabilitas Sensorik Netra (Buta)</option>
+                      <option value="Disabilitas Sensorik Rungu Wicara">Disabilitas Sensorik Rungu Wicara (Tuli / Bisu)</option>
+                      <option value="Disabilitas Ganda / Multi">Disabilitas Ganda / Multi</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
               {/* Form Buttons */}
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-150 dark:border-slate-800 sticky bottom-0 bg-white dark:bg-slate-900 pb-1">
                 <button
@@ -1161,6 +1214,19 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
               <div>
                 <span className="text-[10px] text-slate-450 uppercase block font-semibold">No. HP Aktif</span>
                 <span className="font-bold text-slate-710 dark:text-slate-355 font-mono">{selectedPenduduk.noHp}</span>
+              </div>
+
+              <div className="col-span-2 border-t border-slate-100 dark:border-slate-800 pt-3 flex flex-col gap-1">
+                <span className="text-[10px] text-slate-450 uppercase block font-semibold">Status Kesehatan / Disabilitas</span>
+                {selectedPenduduk.isDisabilitas ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/15 self-start">
+                    ⚠️ Menyandang Disabilitas: {selectedPenduduk.jenisDisabilitas}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/15 self-start">
+                    ✓ Sehat Walafiat (Non-Disabilitas)
+                  </span>
+                )}
               </div>
 
               <div className="col-span-2 border-t border-slate-100 dark:border-slate-800 pt-3 flex justify-between text-[10px] text-slate-450">

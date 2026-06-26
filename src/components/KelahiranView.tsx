@@ -18,8 +18,8 @@ import {
   MapPin,
   ClipboardCopy
 } from "lucide-react";
-import { User as UserType, Kelahiran } from "../types";
-import { db } from "../db/mockSupabase";
+import { User as UserType, Kelahiran, Keluarga, Penduduk } from "../types";
+import { db, getCartoonAvatar } from "../db/mockSupabase";
 
 interface KelahiranViewProps {
   currentUser: UserType;
@@ -28,6 +28,7 @@ interface KelahiranViewProps {
 
 export default function KelahiranView({ currentUser, addToast }: KelahiranViewProps) {
   const [kelahiranList, setKelahiranList] = useState<Kelahiran[]>([]);
+  const [kkList, setKkList] = useState<Keluarga[]>([]);
   
   // Search and Filter states
   const [searchQuery, setSearchQuery] = useState("");
@@ -48,6 +49,8 @@ export default function KelahiranView({ currentUser, addToast }: KelahiranViewPr
   const [tanggalLahir, setTanggalLahir] = useState("");
   const [rw, setRw] = useState("");
   const [rt, setRt] = useState("");
+  const [targetNoKk, setTargetNoKk] = useState("");
+  const [jenisKelamin, setJenisKelamin] = useState<"L" | "P">("L");
 
   // Custom Confirmation Modal state to bypass browser window.confirm constraints inside sandboxed iframes
   const [confirmModal, setConfirmModal] = useState<{
@@ -78,6 +81,8 @@ export default function KelahiranView({ currentUser, addToast }: KelahiranViewPr
     try {
       const data = await db.getKelahiran(currentUser);
       setKelahiranList(data);
+      const kks = await db.getKeluarga(currentUser);
+      setKkList(kks);
     } catch (err: any) {
       addToast("Gagal memuat data kelahiran: " + err.message, "error");
     }
@@ -90,6 +95,8 @@ export default function KelahiranView({ currentUser, addToast }: KelahiranViewPr
     setNamaAyah("");
     setNamaIbu("");
     setTanggalLahir(new Date().toISOString().split("T")[0]);
+    setTargetNoKk("");
+    setJenisKelamin("L");
     
     const dynamicRwList = Array.from(new Set([...db.getRwList(), "01", "02"])).sort((a,b) => a.localeCompare(b));
     const defaultRw = dynamicRwList[0] || "01";
@@ -148,19 +155,66 @@ export default function KelahiranView({ currentUser, addToast }: KelahiranViewPr
 
     const finalNik = punyaNik === "YA" ? nikBayi.trim() : "";
 
+    // Decide which RT and RW to use (if KK selected, use KK's; else use form's)
+    let finalRt = rt.padStart(2, "0");
+    let finalRw = rw.padStart(2, "0");
+    
+    if (targetNoKk) {
+      const selectedKk = kkList.find(k => k.noKk === targetNoKk);
+      if (selectedKk) {
+        finalRt = selectedKk.rt;
+        finalRw = selectedKk.rw;
+      }
+    }
+
     const payload = {
       nikBayi: finalNik,
       namaBayi: namaBayi.trim(),
       namaAyah: namaAyah.trim(),
       namaIbu: namaIbu.trim(),
       tanggalLahir,
-      rw: rw.padStart(2, "0"),
-      rt: rt.padStart(2, "0")
+      rw: finalRw,
+      rt: finalRt,
+      noKk: targetNoKk || undefined
     };
 
     try {
       await db.insertKelahiran(payload, currentUser);
-      addToast(`Data kelahiran bayi ${namaBayi} berhasil didaftarkan.`, "success");
+      
+      // Automatically register as a resident (Penduduk) if targetNoKk is selected
+      if (targetNoKk) {
+        const generatedNik = finalNik || ("3204" + Math.floor(100000000000 + Math.random() * 900000000000).toString());
+
+        const pendudukPayload: Omit<Penduduk, "id" | "tanggalInput"> = {
+          nik: generatedNik,
+          noKk: targetNoKk,
+          namaLengkap: namaBayi.trim(),
+          tempatLahir: "Wargaluyu",
+          tanggalLahir: tanggalLahir,
+          jenisKelamin: jenisKelamin,
+          agama: "Islam",
+          pendidikan: "Tidak / Belum Sekolah",
+          pekerjaan: "BELUM/TIDAK BEKERJA",
+          statusPerkawinan: "Belum Kawin",
+          statusHubungan: "Anak",
+          kewarganegaraan: "WNI",
+          noHp: "",
+          statusTinggal: "Tetap",
+          rt: finalRt,
+          rw: finalRw,
+          avatar: getCartoonAvatar(jenisKelamin, tanggalLahir, namaBayi.trim()),
+          isDisabilitas: false,
+          jenisDisabilitas: ""
+        };
+
+        await db.insertPenduduk(pendudukPayload, currentUser);
+      }
+
+      if (targetNoKk) {
+        addToast(`Data kelahiran bayi ${namaBayi} berhasil didaftarkan & otomatis dimasukkan ke anggota keluarga KK No. ${targetNoKk}!`, "success");
+      } else {
+        addToast(`Data kelahiran bayi ${namaBayi} berhasil didaftarkan.`, "success");
+      }
       setIsFormOpen(false);
       fetchData();
     } catch (err: any) {
@@ -286,11 +340,24 @@ export default function KelahiranView({ currentUser, addToast }: KelahiranViewPr
               {paginatedList.length > 0 ? (
                 paginatedList.map((k) => (
                   <tr key={k.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/10 transition-colors">
-                    <td className="px-5 py-4 font-bold text-slate-800 dark:text-slate-150 flex items-center gap-2">
-                      <div className="w-6.5 h-6.5 rounded-full bg-pink-500/10 text-pink-500 flex items-center justify-center">
-                        <Baby className="w-3.5 h-3.5" />
+                    <td className="px-5 py-4 text-slate-800 dark:text-slate-150">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6.5 h-6.5 rounded-full bg-pink-500/10 text-pink-500 flex items-center justify-center">
+                          <Baby className="w-3.5 h-3.5" />
+                        </div>
+                        <div>
+                          <p className="font-bold">{k.namaBayi}</p>
+                          {k.noKk ? (
+                            <span className="inline-flex items-center text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded mt-0.5">
+                              ✓ Masuk KK: {k.noKk}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center text-[9px] font-semibold text-slate-400 bg-slate-100 dark:bg-slate-850 px-1.5 py-0.2 rounded mt-0.5">
+                              Hanya Catatan Lahir
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      {k.namaBayi}
                     </td>
                     <td className="px-5 py-4">
                       {k.nikBayi ? (
@@ -460,6 +527,63 @@ export default function KelahiranView({ currentUser, addToast }: KelahiranViewPr
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/20 text-xs text-slate-800 dark:text-slate-100 focus:outline-none"
                 />
               </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Hubungkan Otomatis ke Kartu Keluarga (KK)</label>
+                <select
+                  value={targetNoKk}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setTargetNoKk(val);
+                    if (val) {
+                      const foundKk = kkList.find(k => k.noKk === val);
+                      if (foundKk) {
+                        setRt(foundKk.rt);
+                        setRw(foundKk.rw);
+                      }
+                    }
+                  }}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/20 text-xs text-slate-800 dark:text-slate-100 focus:outline-none font-medium"
+                >
+                  <option value="">-- Hanya Catat Kelahiran (Tidak Masuk KK) --</option>
+                  {kkList.map(k => (
+                    <option key={k.id} value={k.noKk}>
+                      KK {k.noKk} (K.K: {k.kepalaKeluargaNama} - RT {k.rt}/RW {k.rw})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[9px] text-slate-400 mt-0.5">Jika dipilih, bayi akan otomatis terdaftar sebagai anggota keluarga (anak) di data kependudukan.</p>
+              </div>
+
+              {targetNoKk && (
+                <div className="space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Jenis Kelamin Bayi</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setJenisKelamin("L")}
+                      className={`py-2 px-3 rounded-xl border text-[11px] font-bold text-center transition-all cursor-pointer ${
+                        jenisKelamin === "L"
+                          ? "bg-emerald-600 border-emerald-500 text-white shadow-sm"
+                          : "border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900"
+                      }`}
+                    >
+                      Laki-Laki (L)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setJenisKelamin("P")}
+                      className={`py-2 px-3 rounded-xl border text-[11px] font-bold text-center transition-all cursor-pointer ${
+                        jenisKelamin === "P"
+                          ? "bg-emerald-600 border-emerald-500 text-white shadow-sm"
+                          : "border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900"
+                      }`}
+                    >
+                      Perempuan (P)
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2 space-y-1.5">

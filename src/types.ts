@@ -48,6 +48,8 @@ export interface Penduduk {
   rw: string;
   rt: string;
   avatar?: string;
+  isDisabilitas?: boolean;
+  jenisDisabilitas?: string;
   tanggalInput: string;
 }
 
@@ -60,6 +62,7 @@ export interface Kelahiran {
   tanggalLahir: string;
   rw: string;
   rt: string;
+  noKk?: string; // Target KK number
   tanggalInput: string;
 }
 
