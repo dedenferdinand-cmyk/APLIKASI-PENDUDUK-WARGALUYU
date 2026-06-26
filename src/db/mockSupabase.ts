@@ -880,8 +880,24 @@ export class MockSupabaseClient {
   // KELUARGA (KK) API WITH RLS
   async getKeluarga(user: User): Promise<Keluarga[]> {
     await this.syncTableFromSupabase("keluarga", STORAGE_KEYS.KELUARGA);
-    const raw = this.getItems<Keluarga>(STORAGE_KEYS.KELUARGA);
-    return this.applyRLSFilter(raw, user);
+    await this.syncTableFromSupabase("penduduk", STORAGE_KEYS.PENDUDUK);
+    
+    const rawKeluarga = this.getItems<Keluarga>(STORAGE_KEYS.KELUARGA);
+    const rawPenduduk = this.getItems<Penduduk>(STORAGE_KEYS.PENDUDUK);
+
+    // Dynamic update of jumlahAnggota for each Keluarga row
+    const updatedKeluarga = rawKeluarga.map(kk => {
+      const count = rawPenduduk.filter(p => p.noKk === kk.noKk).length;
+      return {
+        ...kk,
+        jumlahAnggota: count
+      };
+    });
+
+    // Save back to local storage so any update is persisted locally
+    this.saveItems(STORAGE_KEYS.KELUARGA, updatedKeluarga);
+
+    return this.applyRLSFilter(updatedKeluarga, user);
   }
 
   async insertKeluarga(kk: Omit<Keluarga, "id" | "jumlahAnggota">, user: User): Promise<Keluarga> {
