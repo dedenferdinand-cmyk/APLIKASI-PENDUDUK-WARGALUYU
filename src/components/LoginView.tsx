@@ -43,14 +43,14 @@ export default function LoginView({ onLoginSuccess, darkMode, setDarkMode, addTo
     };
   }, []);
 
-  const handleResetPassword = (e: React.FormEvent) => {
+  const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetUsername.trim() || !resetNama.trim() || !resetNewPassword.trim()) {
       addToast("Harap isi seluruh kolom verifikasi!", "warning");
       return;
     }
     try {
-      const success = db.resetPasswordMandiri(resetUsername, resetNama, resetNewPassword);
+      const success = await db.resetPasswordMandiri(resetUsername, resetNama, resetNewPassword);
       if (success) {
         addToast("Password berhasil direset! Silakan masuk dengan password baru anda.", "success");
         setIsResetOpen(false);
@@ -63,7 +63,7 @@ export default function LoginView({ onLoginSuccess, darkMode, setDarkMode, addTo
     }
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
       addToast("Username dan Password wajib diisi!", "warning");
@@ -72,41 +72,44 @@ export default function LoginView({ onLoginSuccess, darkMode, setDarkMode, addTo
 
     setIsLoading(true);
 
-    // Simulate database lookup network latency
-    setTimeout(() => {
-      try {
-        const users = db.getUsers();
-        const matched = users.find(u => u.username.toLowerCase() === username.toLowerCase().trim());
-        
-        let authenticated = false;
-        if (matched) {
-          if (matched.password) {
-            if (password === matched.password || password === "wargaluyu123" || password === "admin") {
-              authenticated = true;
-            }
-          } else {
-            if (matched.username === "admin" && (password === "wargaluyu123" || password === "admin")) {
-              authenticated = true;
-            } else if (matched.username !== "admin" && (password === matched.username || password === "wargaluyu123" || password === "admin")) {
-              authenticated = true;
-            }
+    try {
+      // Direct pull of user accounts from Supabase to guarantee real-time login across multiple devices!
+      const syncSuccess = await db.syncTableFromSupabase("users", "sipenduk_users", true);
+      if (!syncSuccess) {
+        console.warn("[Login Sync] Could not sync latest users from Supabase. Falling back to cached local storage.");
+      }
+
+      const users = db.getUsers();
+      const matched = users.find(u => u.username.toLowerCase() === username.toLowerCase().trim());
+      
+      let authenticated = false;
+      if (matched) {
+        if (matched.password) {
+          if (password === matched.password || password === "wargaluyu123" || password === "admin") {
+            authenticated = true;
+          }
+        } else {
+          if (matched.username === "admin" && (password === "wargaluyu123" || password === "admin")) {
+            authenticated = true;
+          } else if (matched.username !== "admin" && (password === matched.username || password === "wargaluyu123" || password === "admin")) {
+            authenticated = true;
           }
         }
-
-        if (authenticated && matched) {
-          db.setCurrentUser(matched);
-          db.addLog(matched, "Berhasil masuk ke dalam sistem SIDEWA.");
-          addToast(`Selamat datang kembali, ${matched.nama}!`, "success");
-          onLoginSuccess(matched);
-        } else {
-          addToast("Username atau Password salah! Silakan coba lagi.", "error");
-        }
-      } catch (err: any) {
-        addToast(err.message || "Terjadi kesalahan sistem.", "error");
-      } finally {
-        setIsLoading(false);
       }
-    }, 850);
+
+      if (authenticated && matched) {
+        db.setCurrentUser(matched);
+        db.addLog(matched, "Berhasil masuk ke dalam sistem SIDEWA.");
+        addToast(`Selamat datang kembali, ${matched.nama}!`, "success");
+        onLoginSuccess(matched);
+      } else {
+        addToast("Username atau Password salah! Silakan coba lagi.", "error");
+      }
+    } catch (err: any) {
+      addToast(err.message || "Terjadi kesalahan koneksi sistem saat mencoba masuk.", "error");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

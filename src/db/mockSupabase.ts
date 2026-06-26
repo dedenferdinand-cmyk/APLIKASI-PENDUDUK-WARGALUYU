@@ -459,25 +459,31 @@ export class MockSupabaseClient {
     return allSuccess;
   }
 
-  async supUpsert(tableName: string, record: any) {
+  async supUpsert(tableName: string, record: any): Promise<{ success: boolean; error?: any }> {
     try {
       const { error } = await supabase.from(tableName).upsert(record);
       if (error) {
         console.warn(`[Supabase Error] Upsert table '${tableName}' failed:`, error);
+        return { success: false, error };
       }
+      return { success: true };
     } catch (e: any) {
       console.warn(`[Supabase Connection Failure] Ignored for offline redundancy on table '${tableName}':`, e);
+      return { success: false, error: e };
     }
   }
 
-  async supDelete(tableName: string, id: string) {
+  async supDelete(tableName: string, id: string): Promise<{ success: boolean; error?: any }> {
     try {
       const { error } = await supabase.from(tableName).delete().eq("id", id);
       if (error) {
         console.warn(`[Supabase Error] Delete from '${tableName}' failed:`, error);
+        return { success: false, error };
       }
+      return { success: true };
     } catch (e: any) {
       console.warn(`[Supabase Connection Failure] Ignored for offline redundancy on table '${tableName}':`, e);
+      return { success: false, error: e };
     }
   }
 
@@ -669,7 +675,7 @@ export class MockSupabaseClient {
     return list;
   }
 
-  addUser(user: User, operator: User): boolean {
+  async addUser(user: User, operator: User): Promise<boolean> {
     if (operator.role !== "ADMIN_DESA") {
       throw new Error("Unauthorized! Only Admin Desa can perform user management.");
     }
@@ -689,12 +695,19 @@ export class MockSupabaseClient {
 
     users.push(user);
     this.saveItems(STORAGE_KEYS.USERS, users);
-    this.supUpsert("users", user);
+    
+    // Attempt real-time cloud sync
+    const res = await this.supUpsert("users", user);
+    if (!res.success) {
+      const errorMsg = res.error?.message || "Koneksi Supabase gagal.";
+      throw new Error(`Akun tersimpan LOKAL, tetapi GAGAL terunggah ke Cloud Supabase! Detail Error: ${errorMsg}. Pastikan skema tabel 'users' Anda di Supabase memiliki seluruh kolom: id, username, nama, role, rw, rt, password, avatar.`);
+    }
+
     this.addLog(operator, `Menambahkan pengguna baru: ${user.nama} (${user.role})`);
     return true;
   }
 
-  deleteUser(userId: string, operator: User): boolean {
+  async deleteUser(userId: string, operator: User): Promise<boolean> {
     if (operator.role !== "ADMIN_DESA") {
       throw new Error("Unauthorized! Only Admin Desa can delete users.");
     }
@@ -715,12 +728,18 @@ export class MockSupabaseClient {
 
     users = users.filter(u => u.id !== userId);
     this.saveItems(STORAGE_KEYS.USERS, users);
-    this.supDelete("users", userId);
+    
+    const res = await this.supDelete("users", userId);
+    if (!res.success) {
+      const errorMsg = res.error?.message || "Koneksi Supabase gagal.";
+      throw new Error(`Akun dihapus LOKAL, tetapi GAGAL dihapus dari Cloud Supabase! Detail Error: ${errorMsg}`);
+    }
+
     this.addLog(operator, `Menghapus pengguna: ${userToDelete.nama} (${userToDelete.role})`);
     return true;
   }
 
-  updateUser(userId: string, updatedFields: Partial<User>, operator: User): boolean {
+  async updateUser(userId: string, updatedFields: Partial<User>, operator: User): Promise<boolean> {
     if (operator.role !== "ADMIN_DESA") {
       throw new Error("Unauthorized! Only Admin Desa can perform user management.");
     }
@@ -740,7 +759,13 @@ export class MockSupabaseClient {
     };
 
     this.saveItems(STORAGE_KEYS.USERS, users);
-    this.supUpsert("users", users[userIndex]);
+    
+    const res = await this.supUpsert("users", users[userIndex]);
+    if (!res.success) {
+      const errorMsg = res.error?.message || "Koneksi Supabase gagal.";
+      throw new Error(`Data diubah LOKAL, tetapi GAGAL diperbarui ke Cloud Supabase! Detail Error: ${errorMsg}. Pastikan skema tabel 'users' Anda kompatibel.`);
+    }
+
     this.addLog(operator, `Mengubah data pengguna: ${users[userIndex].nama} (${users[userIndex].role})`);
 
     const currentUser = this.getCurrentUser();
@@ -751,7 +776,7 @@ export class MockSupabaseClient {
     return true;
   }
 
-  resetPasswordMandiri(username: string, nama: string, passwordBaru: string): boolean {
+  async resetPasswordMandiri(username: string, nama: string, passwordBaru: string): Promise<boolean> {
     const users = this.getUsers();
     const matchedIndex = users.findIndex(
       u => u.username.toLowerCase().trim() === username.toLowerCase().trim() &&
@@ -769,7 +794,13 @@ export class MockSupabaseClient {
 
     users[matchedIndex] = updatedUser;
     this.saveItems(STORAGE_KEYS.USERS, users);
-    this.supUpsert("users", updatedUser);
+    
+    const res = await this.supUpsert("users", updatedUser);
+    if (!res.success) {
+      const errorMsg = res.error?.message || "Koneksi Supabase gagal.";
+      throw new Error(`Password berhasil direset LOKAL, tetapi GAGAL disinkronkan ke Cloud Supabase! Detail Error: ${errorMsg}`);
+    }
+
     this.addLog(updatedUser, `Melakukan reset password akun secara mandiri.`);
 
     return true;

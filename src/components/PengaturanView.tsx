@@ -319,15 +319,133 @@ export default function PengaturanView({ currentUser, addToast, onLogout }: Peng
             </div>
             
             <p className="text-slate-400 leading-relaxed text-[11px]">
-              Draf engine ini dirancang siap bermigrasi ke tabel real Supabase. Buat project baru di portal Supabase, lalu jalankan SQL berikut atau buat tabel dengan nama-nama berikut di database Anda:
+              Draf engine dirancang siap sinkronisasi real-time multi-perangkat. Agar akun baru & data sinkron sempurna antara Laptop dan HP, pastikan tabel Anda di Supabase dibuat dengan format <strong>camelCase (menggunakan tanda kutip ganda pada SQL)</strong> agar cocok dengan skema aplikasi, serta nonaktifkan RLS atau buat policy agar data tidak terbaca kosong.
             </p>
 
-            <ul className="space-y-2 font-mono text-[10px] bg-slate-950/80 p-3 rounded-xl border border-slate-800/65 text-slate-300">
-              <li>• <span className="text-emerald-400">users</span> (id, username, nama, role, rw, rt)</li>
-              <li>• <span className="text-emerald-400">keluarga</span> (id, no_kk, kepala_keluarga_nama, alamat, rw, rt)</li>
-              <li>• <span className="text-emerald-400">penduduk</span> (id, nik, no_kk, nama_lengkap, tempat_lahir, tanggal_lahir, jenis_kelamin, status_tinggal, rw, rt, ...)</li>
-              <li>• <span className="text-emerald-400">kelahiran</span>, <span className="text-emerald-400">kematian</span>, <span className="text-emerald-400">mutasi</span></li>
-            </ul>
+            <details className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-[10px] group transition-all duration-200">
+              <summary className="font-bold text-emerald-400 list-none flex items-center gap-1 cursor-pointer select-none">
+                <span className="transition-transform group-open:rotate-90 text-[8px] inline-block">▶</span>
+                <span>Salin Script SQL Pembuat Tabel</span>
+              </summary>
+              <pre className="mt-2.5 p-2 bg-slate-900 rounded border border-slate-800 overflow-x-auto text-[9px] text-slate-300 leading-normal max-h-[180px] select-all scrollbar-thin">
+{`-- SCRIPT DATABASE SIDEWA DESA WARGALUYU
+-- Salin & jalankan di SQL Editor Supabase Anda:
+
+-- 1. Tabel users
+CREATE TABLE IF NOT EXISTS public.users (
+    id TEXT PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    nama TEXT NOT NULL,
+    role TEXT NOT NULL,
+    rw TEXT,
+    rt TEXT,
+    password TEXT,
+    avatar TEXT
+);
+
+-- 2. Tabel keluarga
+CREATE TABLE IF NOT EXISTS public.keluarga (
+    id TEXT PRIMARY KEY,
+    "noKk" TEXT NOT NULL,
+    "kepalaKeluargaId" TEXT,
+    "kepalaKeluargaNama" TEXT,
+    alamat TEXT,
+    rw TEXT NOT NULL,
+    rt TEXT NOT NULL,
+    "jumlahAnggota" INTEGER DEFAULT 1
+);
+
+-- 3. Tabel penduduk
+CREATE TABLE IF NOT EXISTS public.penduduk (
+    id TEXT PRIMARY KEY,
+    nik TEXT NOT NULL,
+    "noKk" TEXT NOT NULL,
+    "namaLengkap" TEXT NOT NULL,
+    "tempatLahir" TEXT,
+    "tanggalLahir" TEXT,
+    "jenisKelamin" TEXT,
+    agama TEXT,
+    pendidikan TEXT,
+    pekerjaan TEXT,
+    "statusPerkawinan" TEXT,
+    "statusHubungan" TEXT,
+    kewarganegaraan TEXT,
+    "noHp" TEXT,
+    "statusTinggal" TEXT,
+    rw TEXT NOT NULL,
+    rt TEXT NOT NULL,
+    avatar TEXT,
+    "tanggalInput" TEXT
+);
+
+-- 4. Tabel kelahiran
+CREATE TABLE IF NOT EXISTS public.kelahiran (
+    id TEXT PRIMARY KEY,
+    "nikBayi" TEXT,
+    "namaBayi" TEXT NOT NULL,
+    "namaAyah" TEXT,
+    "namaIbu" TEXT,
+    "tanggalLahir" TEXT,
+    rw TEXT NOT NULL,
+    rt TEXT NOT NULL,
+    "tanggalInput" TEXT
+);
+
+-- 5. Tabel kematian
+CREATE TABLE IF NOT EXISTS public.kematian (
+    id TEXT PRIMARY KEY,
+    nik TEXT NOT NULL,
+    nama TEXT NOT NULL,
+    "tanggalMeninggal" TEXT,
+    "sebabKematian" TEXT,
+    rw TEXT NOT NULL,
+    rt TEXT NOT NULL,
+    "tanggalInput" TEXT
+);
+
+-- 6. Tabel mutasi
+CREATE TABLE IF NOT EXISTS public.mutasi (
+    id TEXT PRIMARY KEY,
+    "jenisMutasi" TEXT NOT NULL,
+    nik TEXT NOT NULL,
+    nama TEXT NOT NULL,
+    "alamatAsal" TEXT,
+    "alamatTujuan" TEXT,
+    "tanggalMutasi" TEXT,
+    rw TEXT NOT NULL,
+    rt TEXT NOT NULL,
+    "tanggalInput" TEXT
+);
+
+-- 7. Tabel logs
+CREATE TABLE IF NOT EXISTS public.logs (
+    id TEXT PRIMARY KEY,
+    "userId" TEXT NOT NULL,
+    username TEXT NOT NULL,
+    nama TEXT NOT NULL,
+    role TEXT NOT NULL,
+    deskripsi TEXT NOT NULL,
+    timestamp TEXT NOT NULL
+);
+
+-- 8. Tabel wilayah
+CREATE TABLE IF NOT EXISTS public.wilayah (
+    id TEXT PRIMARY KEY,
+    nama TEXT NOT NULL,
+    rws JSONB NOT NULL
+);
+
+-- DISABLE RLS UNTUK DEMO & CO-WORKING TANPA LOGIN SUPABASE AUTH
+ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.keluarga DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.penduduk DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.kelahiran DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.kematian DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.mutasi DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.logs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.wilayah DISABLE ROW LEVEL SECURITY;`}
+              </pre>
+            </details>
 
             <div className="p-3.5 bg-slate-950/40 border border-dashed border-slate-800 rounded-xl space-y-1">
               <span className="text-[9px] font-bold text-slate-455 block uppercase">Tambahkan Variabel Lingkungan (.env):</span>

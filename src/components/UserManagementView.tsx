@@ -128,9 +128,9 @@ export default function UserManagementView({ currentUser, addToast }: UserManage
       isOpen: true,
       title: "Konfirmasi Hapus Akun",
       message: `Apakah Anda yakin ingin menghapus akun operator "${targetNama}"?`,
-      onConfirm: () => {
+      onConfirm: async () => {
         try {
-          const success = db.deleteUser(userId, currentUser);
+          const success = await db.deleteUser(userId, currentUser);
           if (success) {
             addToast("Operator telah berhasil dihapus dari sistem.", "success");
             fetchUsers();
@@ -169,7 +169,7 @@ export default function UserManagementView({ currentUser, addToast }: UserManage
   };
 
   // Submit user form (Add or Edit)
-  const handleSubmitUser = (e: React.FormEvent) => {
+  const handleSubmitUser = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!username.trim() || !nama.trim()) {
@@ -191,7 +191,7 @@ export default function UserManagementView({ currentUser, addToast }: UserManage
           password: passwordState.trim() ? passwordState.trim() : undefined
         };
 
-        const success = db.updateUser(editingUser.id, updatedFields, currentUser);
+        const success = await db.updateUser(editingUser.id, updatedFields, currentUser);
         if (success) {
           addToast(`Akun operator harian ${nama} berhasil diperbarui!`, "success");
         } else {
@@ -212,7 +212,7 @@ export default function UserManagementView({ currentUser, addToast }: UserManage
           newUser.password = passwordState.trim();
         }
 
-        db.addUser(newUser, currentUser);
+        await db.addUser(newUser, currentUser);
         addToast(`Akun operator harian baru untuk ${nama} berhasil diaktifkan!`, "success");
       }
 
