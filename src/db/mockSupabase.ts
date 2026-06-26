@@ -322,6 +322,7 @@ const INITIAL_LOGS: AktivitasLog[] = [];
 // Base DB Class that emulates Supabase operations + enforces Row Level Security
 export class MockSupabaseClient {
   private lastSyncTimestamps: { [key: string]: number } = {};
+  private lastLocalWriteTimestamps: { [key: string]: number } = {};
 
   constructor() {
     this.init();
@@ -371,6 +372,23 @@ export class MockSupabaseClient {
   async syncTableFromSupabase(tableName: string, storageKey: string, force = false): Promise<boolean> {
     const now = Date.now();
     const lastSync = this.lastSyncTimestamps[tableName] || 0;
+    const lastWrite = this.lastLocalWriteTimestamps[tableName] || 0;
+
+    // 1. For regional hierarchy (wilayah), we want the local state to be the source of truth if edited.
+    // Avoid blindly overwriting regional changes in the background with potentially empty or stale cloud configuration.
+    if (tableName === "wilayah") {
+      const hasLocal = localStorage.getItem(storageKey);
+      if (hasLocal && (lastWrite > 0 || now - lastSync < 300000)) { // 5 minutes cache for wilayah
+        return true;
+      }
+    }
+
+    // 2. For all tables, if we have written locally within the last 15 seconds,
+    // skip pulling to avoid race conditions (overwriting newer local edits with stale pull).
+    if (now - lastWrite < 15000) {
+      return true;
+    }
+
     // Cache for 2.5 seconds to prevent spamming queries
     if (!force && (now - lastSync < 2500)) {
       return true;
@@ -382,6 +400,31 @@ export class MockSupabaseClient {
         return false;
       }
       if (data) {
+        // Prevent cloud overwriting with empty array if we have local defaults
+        if (data.length === 0) {
+          if (tableName === "wilayah") {
+            const currentWilayah = this.getWilayah();
+            if (currentWilayah && currentWilayah.length > 0) {
+              console.log("[Supabase Sync] Seeding remote 'wilayah' table with local configuration...");
+              for (const d of currentWilayah) {
+                await this.supUpsert("wilayah", { id: d.id, nama: d.nama, rws: d.rws });
+              }
+              this.lastSyncTimestamps[tableName] = now;
+              return true;
+            }
+          } else if (tableName === "users") {
+            const currentUsers = this.getUsers();
+            if (currentUsers && currentUsers.length > 0) {
+              console.log("[Supabase Sync] Seeding remote 'users' table with local accounts...");
+              for (const u of currentUsers) {
+                await this.supUpsert("users", u);
+              }
+              this.lastSyncTimestamps[tableName] = now;
+              return true;
+            }
+          }
+        }
+
         this.saveItems(storageKey, data);
         this.lastSyncTimestamps[tableName] = now;
         return true;
@@ -580,18 +623,46 @@ export class MockSupabaseClient {
   // USERS MANAGEMENT
   getUsers(): User[] {
     const list = this.getItems<User>(STORAGE_KEYS.USERS);
-    // Bulletproof fallback: ensure all default system credentials from INITIAL_USERS always exist
-    const merged = [...list];
-    for (const initUser of INITIAL_USERS) {
-      if (!merged.some(u => u.username.toLowerCase() === initUser.username.toLowerCase())) {
-        merged.push(initUser);
+    
+    // If the list is empty, or we have never successfully pulled from Supabase yet,
+    // merge initial defaults.
+    if (list.length === 0 || !this.lastSyncTimestamps["users"]) {
+      let deletedIds: string[] = [];
+      try {
+        deletedIds = JSON.parse(localStorage.getItem("sidewa_deleted_user_ids") || "[]") as string[];
+      } catch (e) {
+        console.warn("Failed to read deleted user IDs", e);
+      }
+
+      const merged = [...list];
+      for (const initUser of INITIAL_USERS) {
+        if (deletedIds.includes(initUser.id)) {
+          continue;
+        }
+        if (!merged.some(u => u.username.toLowerCase() === initUser.username.toLowerCase())) {
+          merged.push(initUser);
+        }
+      }
+      if (merged.length !== list.length) {
+        this.saveItems(STORAGE_KEYS.USERS, merged);
+      }
+      return merged;
+    }
+
+    // If we have successfully synced from Supabase in the past, the remote database list is the single source of truth.
+    // We must NOT blindly merge missing default users back, because they might have been explicitly deleted from another device.
+    // However, to prevent absolute lockout, we always make sure at least the 'admin' superuser exists.
+    const hasAdmin = list.some(u => u.username.toLowerCase() === "admin");
+    if (!hasAdmin) {
+      const adminUser = INITIAL_USERS.find(u => u.username === "admin");
+      if (adminUser) {
+        const newList = [adminUser, ...list];
+        this.saveItems(STORAGE_KEYS.USERS, newList);
+        return newList;
       }
     }
-    // Self-heal storage if changes happened
-    if (merged.length !== list.length) {
-      this.saveItems(STORAGE_KEYS.USERS, merged);
-    }
-    return merged;
+
+    return list;
   }
 
   addUser(user: User, operator: User): boolean {
@@ -602,6 +673,16 @@ export class MockSupabaseClient {
     if (users.find(u => u.username === user.username)) {
       throw new Error("Username already exists!");
     }
+
+    // If a deleted ID is being reused or added back, remove it from the deleted tracking list
+    try {
+      const deletedIds = JSON.parse(localStorage.getItem("sidewa_deleted_user_ids") || "[]") as string[];
+      if (deletedIds.includes(user.id)) {
+        const filtered = deletedIds.filter(id => id !== user.id);
+        localStorage.setItem("sidewa_deleted_user_ids", JSON.stringify(filtered));
+      }
+    } catch (e) {}
+
     users.push(user);
     this.saveItems(STORAGE_KEYS.USERS, users);
     this.supUpsert("users", user);
@@ -616,6 +697,18 @@ export class MockSupabaseClient {
     let users = this.getUsers();
     const userToDelete = users.find(u => u.id === userId);
     if (!userToDelete) return false;
+
+    // Track this user ID as explicitly deleted so it won't be re-added by fallback
+    try {
+      const deletedIds = JSON.parse(localStorage.getItem("sidewa_deleted_user_ids") || "[]") as string[];
+      if (!deletedIds.includes(userId)) {
+        deletedIds.push(userId);
+        localStorage.setItem("sidewa_deleted_user_ids", JSON.stringify(deletedIds));
+      }
+    } catch (e) {
+      console.warn("Failed to write deleted user ID", e);
+    }
+
     users = users.filter(u => u.id !== userId);
     this.saveItems(STORAGE_KEYS.USERS, users);
     this.supDelete("users", userId);
@@ -654,6 +747,30 @@ export class MockSupabaseClient {
     return true;
   }
 
+  resetPasswordMandiri(username: string, nama: string, passwordBaru: string): boolean {
+    const users = this.getUsers();
+    const matchedIndex = users.findIndex(
+      u => u.username.toLowerCase().trim() === username.toLowerCase().trim() &&
+           u.nama.toLowerCase().trim() === nama.toLowerCase().trim()
+    );
+
+    if (matchedIndex === -1) {
+      throw new Error("Identitas tidak cocok! Pastikan Username dan Nama Lengkap sesuai dengan data operator.");
+    }
+
+    const updatedUser = {
+      ...users[matchedIndex],
+      password: passwordBaru.trim()
+    };
+
+    users[matchedIndex] = updatedUser;
+    this.saveItems(STORAGE_KEYS.USERS, users);
+    this.supUpsert("users", updatedUser);
+    this.addLog(updatedUser, `Melakukan reset password akun secara mandiri.`);
+
+    return true;
+  }
+
   // WILAYAH (DUSUN / RW / RT) MANAGEMENT
   getWilayah(): Dusun[] {
     const raw = localStorage.getItem(STORAGE_KEYS.WILAYAH);
@@ -672,10 +789,24 @@ export class MockSupabaseClient {
     if (operator.role !== "ADMIN_DESA") {
       throw new Error("Unauthorized! Only Admin Desa can modify regional configuration.");
     }
-    localStorage.setItem(STORAGE_KEYS.WILAYAH, JSON.stringify(wilayah));
+
+    const oldWilayah = this.getWilayah();
+    const oldIds = oldWilayah.map(d => d.id);
+    const newIds = wilayah.map(d => d.id);
+    const deletedIds = oldIds.filter(id => !newIds.includes(id));
+
+    this.saveItems(STORAGE_KEYS.WILAYAH, wilayah);
+
+    // Delete removed ones from Supabase
+    deletedIds.forEach(id => {
+      this.supDelete("wilayah", id);
+    });
+
+    // Upsert added/updated ones
     wilayah.forEach(d => {
       this.supUpsert("wilayah", { id: d.id, nama: d.nama, rws: d.rws });
     });
+
     this.addLog(operator, `Mengubah konfigurasi hierarki wilayah Dusun, RW, dan RT`);
     return true;
   }
@@ -998,6 +1129,7 @@ export class MockSupabaseClient {
     localStorage.removeItem(STORAGE_KEYS.MUTASI);
     localStorage.removeItem(STORAGE_KEYS.LOGS);
     localStorage.removeItem(STORAGE_KEYS.IS_INITIALIZED);
+    localStorage.removeItem("sidewa_deleted_user_ids");
     this.init();
     this.addLog(user, "Melakukan reset database kependudukan ke kondisi awal.");
   }
@@ -1008,8 +1140,26 @@ export class MockSupabaseClient {
     return data ? JSON.parse(data) : [];
   }
 
+  private getTableNameFromKey(key: string): string {
+    switch (key) {
+      case STORAGE_KEYS.USERS: return "users";
+      case STORAGE_KEYS.KELUARGA: return "keluarga";
+      case STORAGE_KEYS.PENDUDUK: return "penduduk";
+      case STORAGE_KEYS.KELAHIRAN: return "kelahiran";
+      case STORAGE_KEYS.KEMATIAN: return "kematian";
+      case STORAGE_KEYS.MUTASI: return "mutasi";
+      case STORAGE_KEYS.LOGS: return "logs";
+      case STORAGE_KEYS.WILAYAH: return "wilayah";
+      default: return "";
+    }
+  }
+
   private saveItems<T>(key: string, items: T[]): void {
     localStorage.setItem(key, JSON.stringify(items));
+    const tableName = this.getTableNameFromKey(key);
+    if (tableName) {
+      this.lastLocalWriteTimestamps[tableName] = Date.now();
+    }
   }
 }
 

@@ -108,13 +108,13 @@ export default function App() {
 
   const handleLoginSuccess = (user: UserType) => {
     setCurrentUser(user);
-    addToast(`Autentikasi Berhasil! Selamat datang di SIPENDUK, ${user.nama}.`, "success");
+    addToast(`Autentikasi Berhasil! Selamat datang di SIDEWA, ${user.nama}.`, "success");
     setActiveTab("dashboard");
   };
 
   const handleLogout = () => {
     db.setCurrentUser(null);
-    addToast("Anda telah keluar dari SIPENDUK Wargaluyu.", "warning");
+    addToast("Anda telah keluar dari SIDEWA Wargaluyu.", "warning");
     setCurrentUser(null);
   };
 
@@ -175,8 +175,8 @@ export default function App() {
             </div>
             {!sidebarCollapsed && (
               <div className="min-w-0 transition-opacity duration-300">
-                <span className="block text-xs font-black tracking-widest text-white font-mono">SIPENDUK</span>
-                <span className="block text-[9px] font-bold text-emerald-250 mt-0.5 tracking-tight truncate">Kec. Arjasari, Kab. Bandung</span>
+                <span className="block text-xs font-black tracking-widest text-white font-mono">SIDEWA</span>
+                <span className="block text-[9px] font-bold text-emerald-250 mt-0.5 tracking-tight truncate">Desa Wargaluyu, Arjasari</span>
               </div>
             )}
           </div>
@@ -265,8 +265,8 @@ export default function App() {
             W
           </div>
           <div>
-            <h1 className="text-xs font-black tracking-wider text-white">SIPENDUK</h1>
-            <p className="text-[8px] text-emerald-305 tracking-wider uppercase font-bold text-center">Kec. Arjasari, Kab. Bandung</p>
+            <h1 className="text-xs font-black tracking-wider text-white">SIDEWA</h1>
+            <p className="text-[8px] text-emerald-305 tracking-wider uppercase font-bold text-center">Desa Wargaluyu, Arjasari</p>
           </div>
         </div>
 

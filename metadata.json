@@ -1,6 +1,6 @@
 {
-  "name": "SIPENDUK WARGALUYU",
-  "description": "Sistem Pendataan Penduduk Desa Wargaluyu dengan desain Gen Z yang clean, premium, responsif, dan mobile-first.",
+  "name": "SIDEWA",
+  "description": "Sistem Informasi Desa Wargaluyu dengan desain Gen Z yang clean, premium, responsif, dan mobile-first.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

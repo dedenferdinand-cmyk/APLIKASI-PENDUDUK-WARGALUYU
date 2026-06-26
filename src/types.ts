@@ -13,6 +13,7 @@ export interface User {
   rw?: string; // RW identifier (e.g. "01")
   rt?: string; // RT identifier (e.g. "01")
   avatar?: string;
+  password?: string; // Optional password field
 }
 
 export interface Keluarga {

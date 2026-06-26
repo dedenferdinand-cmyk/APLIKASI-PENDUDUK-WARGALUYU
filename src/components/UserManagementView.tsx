@@ -48,6 +48,7 @@ export default function UserManagementView({ currentUser, addToast }: UserManage
   const [role, setRole] = useState<UserRole>("KETUA_RT");
   const [rw, setRw] = useState("01");
   const [rt, setRt] = useState("01");
+  const [passwordState, setPasswordState] = useState("");
 
   // Regional management temporary states
   const [newDusunNama, setNewDusunNama] = useState("");
@@ -151,6 +152,7 @@ export default function UserManagementView({ currentUser, addToast }: UserManage
     setRole("KETUA_RT");
     setRw(availableRws[0] || "01");
     setRt("01");
+    setPasswordState("");
     setIsFormOpen(true);
   };
 
@@ -162,6 +164,7 @@ export default function UserManagementView({ currentUser, addToast }: UserManage
     setRole(user.role);
     setRw(user.rw || availableRws[0] || "01");
     setRt(user.rt || "01");
+    setPasswordState(user.password || "");
     setIsFormOpen(true);
   };
 
@@ -184,7 +187,8 @@ export default function UserManagementView({ currentUser, addToast }: UserManage
           nama: nama.trim(),
           role,
           rw: role !== "ADMIN_DESA" ? rw : undefined,
-          rt: role === "KETUA_RT" ? rt : undefined
+          rt: role === "KETUA_RT" ? rt : undefined,
+          password: passwordState.trim() ? passwordState.trim() : undefined
         };
 
         const success = db.updateUser(editingUser.id, updatedFields, currentUser);
@@ -204,6 +208,9 @@ export default function UserManagementView({ currentUser, addToast }: UserManage
           rt: role === "KETUA_RT" ? rt : undefined,
           avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120"
         };
+        if (passwordState.trim()) {
+          newUser.password = passwordState.trim();
+        }
 
         db.addUser(newUser, currentUser);
         addToast(`Akun operator harian baru untuk ${nama} berhasil diaktifkan!`, "success");
@@ -446,7 +453,7 @@ export default function UserManagementView({ currentUser, addToast }: UserManage
         <Lock className="w-14 h-14 text-rose-500 mx-auto stroke-1 mb-4" />
         <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-100 uppercase tracking-wider">Akses Terbatas Terdeteksi</h3>
         <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-          Sesuai asas kebijakan kerahasiaan wilayah dan perlindungan data SIPENDUK Wargaluyu, tingkat akun <strong>{currentUser.role.replace("_", " ")}</strong> tidak diizinkan mengakses pengaturan manajemen akun operator atau merubah draf struktur wilayah desa.
+          Sesuai asas kebijakan kerahasiaan wilayah dan perlindungan data SIDEWA Wargaluyu, tingkat akun <strong>{currentUser.role.replace("_", " ")}</strong> tidak diizinkan mengakses pengaturan manajemen akun operator atau merubah draf struktur wilayah desa.
         </p>
         <div className="p-3 bg-slate-50 dark:bg-slate-950 mt-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-[10px] font-semibold text-slate-500">
           Silakan hubungi Superadmin selaku administrator utama untuk penyesuaian hak izin masuk.
@@ -859,7 +866,20 @@ export default function UserManagementView({ currentUser, addToast }: UserManage
                   onChange={(e) => setUsername(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/30 dark:bg-slate-950/30 text-xs font-mono text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-600"
                 />
-                <p className="text-[9px] text-slate-400">Password default untuk masuk awal akan disamakan dengan username.</p>
+                <p className="text-[9px] text-slate-400">Password default untuk masuk awal akan disamakan dengan username jika dikosongkan.</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-450 block dark:text-slate-400">
+                  Password Operator {editingUser && "(Kosongkan jika tidak ingin mengubah)"}
+                </label>
+                <input
+                  type="password"
+                  placeholder={editingUser ? "••••••••" : "Masukkan password default"}
+                  value={passwordState}
+                  onChange={(e) => setPasswordState(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/30 dark:bg-slate-950/30 text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-600"
+                />
               </div>
 
               <div className="space-y-1.5">

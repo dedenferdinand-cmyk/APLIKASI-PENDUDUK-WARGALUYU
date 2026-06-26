@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from "react";
-import { LogIn, Key, User, Moon, Sun } from "lucide-react";
+import { LogIn, Key, User, Moon, Sun, X, ShieldAlert } from "lucide-react";
 import { User as UserType } from "../types";
 import { db } from "../db/mockSupabase";
 
@@ -20,35 +20,30 @@ export default function LoginView({ onLoginSuccess, darkMode, setDarkMode, addTo
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const executeInstantLogin = (userVal: string, passVal: string) => {
-    setUsername(userVal);
-    setPassword(passVal);
-    setIsLoading(true);
-    setTimeout(() => {
-      try {
-        const users = db.getUsers();
-        const matched = users.find(u => u.username.toLowerCase() === userVal.toLowerCase().trim());
-        
-        let authenticated = false;
-        if (matched) {
-          if (matched.username === "admin" && (passVal === "wargaluyu123" || passVal === "admin")) authenticated = true;
-          else if (matched.username !== "admin" && (passVal === matched.username || passVal === "wargaluyu123" || passVal === "admin")) authenticated = true;
-        }
+  // Password reset states
+  const [isResetOpen, setIsResetOpen] = useState(false);
+  const [resetUsername, setResetUsername] = useState("");
+  const [resetNama, setResetNama] = useState("");
+  const [resetNewPassword, setResetNewPassword] = useState("");
 
-        if (authenticated && matched) {
-          db.setCurrentUser(matched);
-          db.addLog(matched, "Berhasil masuk ke dalam sistem SIPENDUK.");
-          addToast(`Selamat datang kembali, ${matched.nama}!`, "success");
-          onLoginSuccess(matched);
-        } else {
-          addToast("Username atau Password salah! Silakan coba lagi.", "error");
-        }
-      } catch (err: any) {
-        addToast(err.message || "Terjadi kesalahan sistem.", "error");
-      } finally {
-        setIsLoading(false);
+  const handleResetPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetUsername.trim() || !resetNama.trim() || !resetNewPassword.trim()) {
+      addToast("Harap isi seluruh kolom verifikasi!", "warning");
+      return;
+    }
+    try {
+      const success = db.resetPasswordMandiri(resetUsername, resetNama, resetNewPassword);
+      if (success) {
+        addToast("Password berhasil direset! Silakan masuk dengan password baru anda.", "success");
+        setIsResetOpen(false);
+        setResetUsername("");
+        setResetNama("");
+        setResetNewPassword("");
       }
-    }, 400);
+    } catch (err: any) {
+      addToast(err.message || "Gagal mereset password.", "error");
+    }
   };
 
   const handleLogin = (e: React.FormEvent) => {
@@ -68,13 +63,22 @@ export default function LoginView({ onLoginSuccess, darkMode, setDarkMode, addTo
         
         let authenticated = false;
         if (matched) {
-          if (matched.username === "admin" && (password === "wargaluyu123" || password === "admin")) authenticated = true;
-          else if (matched.username !== "admin" && (password === matched.username || password === "wargaluyu123" || password === "admin")) authenticated = true;
+          if (matched.password) {
+            if (password === matched.password || password === "wargaluyu123" || password === "admin") {
+              authenticated = true;
+            }
+          } else {
+            if (matched.username === "admin" && (password === "wargaluyu123" || password === "admin")) {
+              authenticated = true;
+            } else if (matched.username !== "admin" && (password === matched.username || password === "wargaluyu123" || password === "admin")) {
+              authenticated = true;
+            }
+          }
         }
 
         if (authenticated && matched) {
           db.setCurrentUser(matched);
-          db.addLog(matched, "Berhasil masuk ke dalam sistem SIPENDUK.");
+          db.addLog(matched, "Berhasil masuk ke dalam sistem SIDEWA.");
           addToast(`Selamat datang kembali, ${matched.nama}!`, "success");
           onLoginSuccess(matched);
         } else {
@@ -101,22 +105,15 @@ export default function LoginView({ onLoginSuccess, darkMode, setDarkMode, addTo
         className="w-full max-w-md bg-white/60 dark:bg-slate-900/60 border border-white/40 dark:border-white/10 rounded-2xl p-8 backdrop-blur-lg shadow-xl relative z-10 transition-all hover:shadow-emerald-500/5 hover:bg-white/70 dark:hover:bg-slate-900/70"
       >
         {/* Banner Logo */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="relative group mb-4">
-            <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 opacity-75 blur-md group-hover:opacity-100 transition duration-1000" />
-            <img 
-              src="/src/assets/images/logo_wargaluyu_1781767575148.jpg" 
-              alt="Logo Desa Wargaluyu"
-              referrerPolicy="no-referrer"
-              className="relative w-20 h-20 rounded-full border border-emerald-400 bg-slate-900 object-cover shadow-inner"
-            />
-          </div>
-          
-          <h1 className="text-2xl font-bold tracking-tight text-center bg-gradient-to-r from-emerald-600 to-teal-500 dark:from-emerald-400 dark:to-teal-300 bg-clip-text text-transparent">
-            SIPENDUK WARGALUYU
+        <div className="flex flex-col items-center mb-6">
+          <h1 className="text-3xl font-extrabold tracking-tight text-center bg-gradient-to-r from-emerald-600 to-teal-500 dark:from-emerald-400 dark:to-teal-300 bg-clip-text text-transparent">
+            SIDEWA
           </h1>
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 text-center uppercase tracking-wider mt-1.5 leading-relaxed px-2">
-            Desa Wargaluyu Kecamatan Arjasari Kabupaten Bandung
+          <p className="text-sm font-bold text-slate-800 dark:text-slate-200 text-center uppercase tracking-wide mt-2 leading-relaxed px-2">
+            Sistem Informasi Desa Wargaluyu
+          </p>
+          <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 text-center uppercase tracking-wider mt-1">
+            Kecamatan Arjasari Kabupaten Bandung
           </p>
         </div>
 
@@ -174,74 +171,101 @@ export default function LoginView({ onLoginSuccess, darkMode, setDarkMode, addTo
           </button>
         </form>
 
-        {/* Quick Demo Login Accounts */}
-        <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800">
-          <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center mb-3">
-            PINTASAN MASUK (KLIK UNTUK MASUK INSTAN):
-          </p>
-          <div className="grid grid-cols-2 gap-2 text-left">
-            <button
-              type="button"
-              onClick={() => executeInstantLogin("admin", "admin")}
-              className="p-2.5 border border-slate-100 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/20 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 hover:border-emerald-300 dark:hover:border-emerald-800 transition text-left cursor-pointer"
-            >
-              <div className="text-[11px] font-extrabold text-slate-800 dark:text-slate-200">Admin Desa</div>
-              <div className="text-[10px] text-emerald-600 dark:text-emerald-300 font-mono font-semibold mt-0.5">admin / admin</div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => executeInstantLogin("rw01", "rw01")}
-              className="p-2.5 border border-slate-100 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/20 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 hover:border-emerald-300 dark:hover:border-emerald-800 transition text-left cursor-pointer"
-            >
-              <div className="text-[11px] font-extrabold text-slate-800 dark:text-slate-200">Ketua RW 01</div>
-              <div className="text-[10px] text-emerald-600 dark:text-emerald-300 font-mono font-semibold mt-0.5">rw01 / rw01</div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => executeInstantLogin("rw02", "rw02")}
-              className="p-2.5 border border-slate-100 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/20 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 hover:border-emerald-300 dark:hover:border-emerald-800 transition text-left cursor-pointer"
-            >
-              <div className="text-[11px] font-extrabold text-slate-800 dark:text-slate-200">Ketua RW 02</div>
-              <div className="text-[10px] text-emerald-600 dark:text-emerald-300 font-mono font-semibold mt-0.5">rw02 / rw02</div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => executeInstantLogin("rt0101", "rt0101")}
-              className="p-2.5 border border-slate-100 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/20 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 hover:border-emerald-300 dark:hover:border-emerald-800 transition text-left cursor-pointer"
-            >
-              <div className="text-[11px] font-extrabold text-slate-800 dark:text-slate-200">Ketua RT 01/RW 01</div>
-              <div className="text-[10px] text-emerald-600 dark:text-emerald-300 font-mono font-semibold mt-0.5">rt0101 / rt0101</div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => executeInstantLogin("rt0102", "rt0102")}
-              className="p-2.5 border border-slate-100 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/20 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 hover:border-emerald-300 dark:hover:border-emerald-800 transition text-left cursor-pointer"
-            >
-              <div className="text-[11px] font-extrabold text-slate-800 dark:text-slate-200">Ketua RT 02/RW 01</div>
-              <div className="text-[10px] text-emerald-600 dark:text-emerald-300 font-mono font-semibold mt-0.5">rt0102 / rt0102</div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => executeInstantLogin("rt0201", "rt0201")}
-              className="p-2.5 border border-slate-100 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/20 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 hover:border-emerald-300 dark:hover:border-emerald-800 transition text-left cursor-pointer"
-            >
-              <div className="text-[11px] font-extrabold text-slate-800 dark:text-slate-200">Ketua RT 01/RW 02</div>
-              <div className="text-[10px] text-emerald-600 dark:text-emerald-300 font-mono font-semibold mt-0.5">rt0201 / rt0201</div>
-            </button>
-          </div>
+        {/* Forgot Password Action Link */}
+        <div className="mt-5 text-center">
+          <button
+            type="button"
+            onClick={() => setIsResetOpen(true)}
+            className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline font-semibold cursor-pointer transition-colors"
+          >
+            Lupa Password? Reset Akun Mandiri
+          </button>
         </div>
 
       </div>
 
       {/* Footer credits in margin style */}
-      <p className="text-[10px] text-slate-400 dark:text-slate-650 mt-8 text-center self-center max-w-sm">
-        Pemerintah Desa Wargaluyu • Kecamatan Arjasari, Kabupaten Bandung • SIPENDUK v2.0
+      <p className="text-[10px] text-slate-400 dark:text-slate-600 mt-8 text-center self-center max-w-sm">
+        Pemerintah Desa Wargaluyu • Kecamatan Arjasari, Kabupaten Bandung • SIDEWA v2.0 • DEVELOPER DEDEN PRIATNA
       </p>
+
+      {/* Reset Password Modal */}
+      {isResetOpen && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in-50 zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/20">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-150 flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-emerald-550" />
+                Reset Password Mandiri
+              </h3>
+              <button 
+                onClick={() => setIsResetOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleResetPassword} className="p-6 space-y-4 text-left">
+              <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-3 text-[11px] text-emerald-700 dark:text-emerald-400 leading-relaxed font-medium">
+                Sistem akan memverifikasi kombinasi Username dan Nama Lengkap yang terdaftar untuk memastikan kewenangan akses Anda sebelum mengubah password.
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block dark:text-slate-400">Username Akun</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Contoh: rw01"
+                  value={resetUsername}
+                  onChange={(e) => setResetUsername(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/30 dark:bg-slate-950/30 text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-600"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block dark:text-slate-400">Nama Lengkap Operator</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Contoh: Bpk. Cecep Supriadi"
+                  value={resetNama}
+                  onChange={(e) => setResetNama(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/30 dark:bg-slate-950/30 text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-600"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block dark:text-slate-400">Password Baru</label>
+                <input
+                  type="password"
+                  required
+                  placeholder="••••••••"
+                  value={resetNewPassword}
+                  onChange={(e) => setResetNewPassword(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/30 dark:bg-slate-950/30 text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-600"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800 font-semibold text-xs">
+                <button
+                  type="button"
+                  onClick={() => setIsResetOpen(false)}
+                  className="px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-md cursor-pointer transition-all active:scale-[0.98]"
+                >
+                  Simpan Password Baru
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

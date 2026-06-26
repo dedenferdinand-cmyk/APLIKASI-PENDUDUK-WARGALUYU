@@ -170,7 +170,7 @@ export default function ImportExportView({ currentUser, addToast }: ImportExport
           <div>
             <span className="text-[10px] uppercase font-bold text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-md">FITUR MANDIRI</span>
             <h3 className="text-sm font-bold text-slate-850 dark:text-slate-200 mt-3">Unggah / Impor File Excel (.xlsx)</h3>
-            <p className="text-xs text-slate-400 mt-1">Gunakan template XLS SIPENDUK untuk memasukkan data warga secara massal sekaligus.</p>
+            <p className="text-xs text-slate-400 mt-1">Gunakan template XLS SIDEWA untuk memasukkan data warga secara massal sekaligus.</p>
 
             {/* Drag & Drop zone */}
             <div
