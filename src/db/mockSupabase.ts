@@ -324,6 +324,10 @@ export class MockSupabaseClient {
   private lastSyncTimestamps: { [key: string]: number } = {};
   private lastLocalWriteTimestamps: { [key: string]: number } = {};
 
+  getLastSyncTimestamp(tableName: string): number {
+    return this.lastSyncTimestamps[tableName] || 0;
+  }
+
   constructor() {
     this.init();
   }

@@ -26,6 +26,23 @@ export default function LoginView({ onLoginSuccess, darkMode, setDarkMode, addTo
   const [resetNama, setResetNama] = useState("");
   const [resetNewPassword, setResetNewPassword] = useState("");
 
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+
+  React.useEffect(() => {
+    const ts = db.getLastSyncTimestamp("users");
+    if (ts > 0) {
+      setLastSyncTime(new Date(ts));
+    }
+
+    const handleSync = () => {
+      setLastSyncTime(new Date());
+    };
+    window.addEventListener("sipenduk-db-updated", handleSync);
+    return () => {
+      window.removeEventListener("sipenduk-db-updated", handleSync);
+    };
+  }, []);
+
   const handleResetPassword = (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetUsername.trim() || !resetNama.trim() || !resetNewPassword.trim()) {
@@ -172,7 +189,7 @@ export default function LoginView({ onLoginSuccess, darkMode, setDarkMode, addTo
         </form>
 
         {/* Forgot Password Action Link */}
-        <div className="mt-5 text-center">
+        <div className="mt-5 text-center flex flex-col items-center gap-4">
           <button
             type="button"
             onClick={() => setIsResetOpen(true)}
@@ -180,6 +197,19 @@ export default function LoginView({ onLoginSuccess, darkMode, setDarkMode, addTo
           >
             Lupa Password? Reset Akun Mandiri
           </button>
+
+          {/* Cloud Sync Status Indicator */}
+          <div className="w-full pt-4 border-t border-slate-100 dark:border-slate-800/70 flex items-center justify-center gap-2 text-[10px] font-medium text-slate-400 dark:text-slate-500">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span>
+              {lastSyncTime 
+                ? `Sinkronisasi Cloud Aktif • Terakhir update: ${lastSyncTime.toLocaleTimeString()}`
+                : "Menghubungkan & Mensinkronkan Cloud..."}
+            </span>
+          </div>
         </div>
 
       </div>

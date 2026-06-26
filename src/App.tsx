@@ -78,8 +78,6 @@ export default function App() {
 
   // Background Automatic Real-Time Sync Daemon
   useEffect(() => {
-    if (!currentUser) return;
-
     const initialSync = async () => {
       try {
         const success = await db.syncAll(true);
@@ -104,7 +102,7 @@ export default function App() {
     }, 6000);
 
     return () => clearInterval(intervalId);
-  }, [currentUser]);
+  }, []);
 
   const handleLoginSuccess = (user: UserType) => {
     setCurrentUser(user);
