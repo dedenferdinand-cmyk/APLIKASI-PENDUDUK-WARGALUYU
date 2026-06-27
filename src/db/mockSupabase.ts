@@ -429,7 +429,24 @@ export class MockSupabaseClient {
           }
         }
 
-        this.saveItems(storageKey, data);
+        const localData = this.getItems<any>(storageKey);
+        const mergedData = data.map((remoteItem: any) => {
+          const localItem = localData.find((l: any) => l.id === remoteItem.id);
+          if (localItem) {
+            return { ...localItem, ...remoteItem };
+          }
+          return remoteItem;
+        });
+
+        const remoteIds = new Set(data.map((r: any) => r.id));
+        const localOnlyRecent = localData.filter((l: any) => {
+          if (remoteIds.has(l.id)) return false;
+          const lastWrite = this.lastLocalWriteTimestamps[tableName] || 0;
+          return Date.now() - lastWrite < 60000;
+        });
+
+        const finalData = [...localOnlyRecent, ...mergedData];
+        this.saveItems(storageKey, finalData, false);
         this.lastSyncTimestamps[tableName] = now;
         return true;
       }
@@ -459,9 +476,38 @@ export class MockSupabaseClient {
     return allSuccess;
   }
 
+  private filterRecordForSupabase(tableName: string, record: any): any {
+    const schemas: { [key: string]: string[] } = {
+      users: ["id", "username", "password", "nama", "role", "rw", "rt", "avatar", "tanggalInput"],
+      keluarga: ["id", "noKk", "kepalaKeluargaId", "kepalaKeluargaNama", "alamat", "rw", "rt", "jumlahAnggota"],
+      penduduk: [
+        "id", "nik", "noKk", "namaLengkap", "tempatLahir", "tanggalLahir", "jenisKelamin",
+        "agama", "pendidikan", "pekerjaan", "statusPerkawinan", "statusHubungan",
+        "kewarganegaraan", "noHp", "statusTinggal", "rw", "rt", "avatar", "tanggalInput"
+      ],
+      kelahiran: ["id", "nikBayi", "namaBayi", "namaAyah", "namaIbu", "tanggalLahir", "rw", "rt", "tanggalInput"],
+      kematian: ["id", "nik", "nama", "tanggalMeninggal", "sebabKematian", "rw", "rt", "tanggalInput"],
+      mutasi: ["id", "jenisMutasi", "nik", "nama", "alamatAsal", "alamatTujuan", "tanggalMutasi", "rw", "rt", "tanggalInput"],
+      logs: ["id", "userId", "username", "role", "action", "ipAddress", "userAgent", "timestamp"],
+      wilayah: ["id", "nama", "rws"]
+    };
+
+    const allowedColumns = schemas[tableName];
+    if (!allowedColumns) return record;
+
+    const filtered: any = {};
+    for (const key of allowedColumns) {
+      if (key in record) {
+        filtered[key] = record[key];
+      }
+    }
+    return filtered;
+  }
+
   async supUpsert(tableName: string, record: any): Promise<{ success: boolean; error?: any }> {
     try {
-      const { error } = await supabase.from(tableName).upsert(record);
+      const filteredRecord = this.filterRecordForSupabase(tableName, record);
+      const { error } = await supabase.from(tableName).upsert(filteredRecord);
       if (error) {
         console.warn(`[Supabase Error] Upsert table '${tableName}' failed:`, error);
         return { success: false, error };
@@ -918,7 +964,7 @@ export class MockSupabaseClient {
       jumlahAnggota: 0 // Will auto update based on residents referencing this KK
     };
     raw.unshift(newKk);
-    this.saveItems(STORAGE_KEYS.KELUARGA, raw);
+    this.saveItems(STORAGE_KEYS.KELUARGA, raw, true);
     this.supUpsert("keluarga", newKk);
     this.addLog(user, `Menambahkan Kartu Keluarga baru No: ${kk.noKk}, Kepala Keluarga: ${kk.kepalaKeluargaNama} di RT ${kk.rt}/RW ${kk.rw}`);
     return newKk;
@@ -945,7 +991,7 @@ export class MockSupabaseClient {
 
     const updated = { ...target, ...kk };
     raw[index] = updated;
-    this.saveItems(STORAGE_KEYS.KELUARGA, raw);
+    this.saveItems(STORAGE_KEYS.KELUARGA, raw, true);
     this.supUpsert("keluarga", updated);
     this.addLog(user, `Memperbarui KK No: ${updated.noKk}, Kepala Keluarga: ${updated.kepalaKeluargaNama}`);
     return updated;
@@ -961,7 +1007,7 @@ export class MockSupabaseClient {
     }
 
     const filtered = raw.filter(k => k.id !== id);
-    this.saveItems(STORAGE_KEYS.KELUARGA, filtered);
+    this.saveItems(STORAGE_KEYS.KELUARGA, filtered, true);
     this.supDelete("keluarga", id);
     this.addLog(user, `Menghapus KK No: ${target.noKk} Kepala Keluarga: ${target.kepalaKeluargaNama}`);
     return true;
@@ -992,7 +1038,7 @@ export class MockSupabaseClient {
       tanggalInput: new Date().toISOString()
     };
     raw.unshift(newP);
-    this.saveItems(STORAGE_KEYS.PENDUDUK, raw);
+    this.saveItems(STORAGE_KEYS.PENDUDUK, raw, true);
     this.supUpsert("penduduk", newP);
 
     // Auto update KK members block
@@ -1023,7 +1069,7 @@ export class MockSupabaseClient {
     const oldNoKk = target.noKk;
     const updated = { ...target, ...p };
     raw[index] = updated;
-    this.saveItems(STORAGE_KEYS.PENDUDUK, raw);
+    this.saveItems(STORAGE_KEYS.PENDUDUK, raw, true);
     this.supUpsert("penduduk", updated);
 
     // Recalculate member count for previous and new KK in case it changed
@@ -1046,7 +1092,7 @@ export class MockSupabaseClient {
     }
 
     const filtered = raw.filter(x => x.id !== id);
-    this.saveItems(STORAGE_KEYS.PENDUDUK, filtered);
+    this.saveItems(STORAGE_KEYS.PENDUDUK, filtered, true);
     this.supDelete("penduduk", id);
 
     // Auto recalculate KK
@@ -1074,7 +1120,7 @@ export class MockSupabaseClient {
       tanggalInput: new Date().toISOString()
     };
     raw.unshift(newK);
-    this.saveItems(STORAGE_KEYS.KELAHIRAN, raw);
+    this.saveItems(STORAGE_KEYS.KELAHIRAN, raw, true);
     this.supUpsert("kelahiran", newK);
     this.addLog(user, `Mencatat Kelahiran Bayi: ${k.namaBayi}, Ibu: ${k.namaIbu} di RT ${k.rt}/RW ${k.rw}`);
     return newK;
@@ -1089,7 +1135,7 @@ export class MockSupabaseClient {
       throw new Error("RLS Violation! Anda tidak berwenang menghapus data wilayah ini.");
     }
 
-    this.saveItems(STORAGE_KEYS.KELAHIRAN, raw.filter(x => x.id !== id));
+    this.saveItems(STORAGE_KEYS.KELAHIRAN, raw.filter(x => x.id !== id), true);
     this.supDelete("kelahiran", id);
     this.addLog(user, `Menghapus data kelahiran bayi: ${target.namaBayi}`);
     return true;
@@ -1113,7 +1159,7 @@ export class MockSupabaseClient {
       tanggalInput: new Date().toISOString()
     };
     raw.unshift(newK);
-    this.saveItems(STORAGE_KEYS.KEMATIAN, raw);
+    this.saveItems(STORAGE_KEYS.KEMATIAN, raw, true);
     this.supUpsert("kematian", newK);
 
     // Optional: Auto adjust residents table status
@@ -1123,7 +1169,7 @@ export class MockSupabaseClient {
       // Clear or label deceased
       penduduk[index].statusTinggal = "Sementara"; // or we could simulate deleting them fully from active citizens
       penduduk[index].namaLengkap += " (Almarhum/ah)";
-      this.saveItems(STORAGE_KEYS.PENDUDUK, penduduk);
+      this.saveItems(STORAGE_KEYS.PENDUDUK, penduduk, true);
       this.supUpsert("penduduk", penduduk[index]);
     }
 
@@ -1140,7 +1186,7 @@ export class MockSupabaseClient {
       throw new Error("RLS Violation! Anda tidak memiliki izin menghapus data wilayah ini.");
     }
 
-    this.saveItems(STORAGE_KEYS.KEMATIAN, raw.filter(x => x.id !== id));
+    this.saveItems(STORAGE_KEYS.KEMATIAN, raw.filter(x => x.id !== id), true);
     this.supDelete("kematian", id);
     this.addLog(user, `Menghapus pencatatan kematian: ${target.nama}`);
     return true;
@@ -1164,7 +1210,7 @@ export class MockSupabaseClient {
       tanggalInput: new Date().toISOString()
     };
     raw.unshift(newM);
-    this.saveItems(STORAGE_KEYS.MUTASI, raw);
+    this.saveItems(STORAGE_KEYS.MUTASI, raw, true);
     this.supUpsert("mutasi", newM);
     this.addLog(user, `Mencatat Mutasi [${m.jenisMutasi}] NIK: ${m.nik}, Nama: ${m.nama} di RT ${m.rt}/RW ${m.rw}`);
     return newM;
@@ -1179,7 +1225,7 @@ export class MockSupabaseClient {
       throw new Error("RLS Violation! Anda tidak memiliki izin menghapus data wilayah ini.");
     }
 
-    this.saveItems(STORAGE_KEYS.MUTASI, raw.filter(x => x.id !== id));
+    this.saveItems(STORAGE_KEYS.MUTASI, raw.filter(x => x.id !== id), true);
     this.supDelete("mutasi", id);
     this.addLog(user, `Menghapus pencatatan mutasi: ${target.nama}`);
     return true;
@@ -1235,10 +1281,10 @@ export class MockSupabaseClient {
     }
   }
 
-  private saveItems<T>(key: string, items: T[]): void {
+  private saveItems<T>(key: string, items: T[], isLocalWrite = false): void {
     localStorage.setItem(key, JSON.stringify(items));
     const tableName = this.getTableNameFromKey(key);
-    if (tableName) {
+    if (tableName && isLocalWrite) {
       this.lastLocalWriteTimestamps[tableName] = Date.now();
     }
   }
