@@ -1431,9 +1431,35 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
             {/* Scrollable Document Area */}
             <div className="flex-1 overflow-y-auto border border-slate-150 dark:border-slate-800 p-8 rounded-xl bg-slate-50 dark:bg-slate-950/20 max-h-[60vh]">
               {/* This is the printable document element */}
-              <div id="sidewa-printable-area" className="bg-white p-10 shadow-sm border border-slate-100 text-slate-900 font-sans mx-auto max-w-[21cm] min-h-[29.7cm] text-[12px] leading-relaxed">
+              <div id="sidewa-printable-area" className="bg-white p-10 shadow-sm border border-slate-100 font-sans mx-auto max-w-[21cm] min-h-[29.7cm] text-[12px] leading-relaxed">
                 {/* Print inline styling */}
                 <style>{`
+                  /* Guarantee sharp black text on high-contrast white sheet backdrop both on screen & print */
+                  #sidewa-printable-area {
+                    background-color: #ffffff !important;
+                    color: #000000 !important;
+                    font-family: Arial, Helvetica, sans-serif !important;
+                  }
+                  #sidewa-printable-area * {
+                    color: #000000 !important;
+                    border-color: #000000 !important;
+                  }
+                  .dpt-table {
+                    border-collapse: collapse !important;
+                    width: 100% !important;
+                    border: 1px solid #000000 !important;
+                  }
+                  .dpt-table th, .dpt-table td {
+                    border: 1px solid #000000 !important;
+                    padding: 5px 8px !important;
+                    color: #000000 !important;
+                    text-align: left;
+                    background-color: #ffffff !important;
+                  }
+                  .dpt-table th {
+                    background-color: #f1f5f9 !important;
+                    font-weight: bold !important;
+                  }
                   @media print {
                     body * {
                       visibility: hidden !important;
@@ -1449,17 +1475,12 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
                       padding: 0 !important;
                       border: none !important;
                       box-shadow: none !important;
-                      color: #000 !important;
-                      background: #fff !important;
+                      color: #000000 !important;
+                      background-color: #ffffff !important;
                     }
                     .no-print {
                       display: none !important;
                     }
-                  }
-                  .dpt-table th, .dpt-table td {
-                    border: 1px solid #000 !important;
-                    padding: 4px 6px !important;
-                    text-align: left;
                   }
                 `}</style>
 
@@ -1467,8 +1488,7 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
                 <div className="text-center space-y-1 pb-4 border-b-2 border-double border-black">
                   <h4 className="font-bold text-sm tracking-wide uppercase">PANITIA PEMUNGUTAN SUARA (PPS) DESA WARGALUYU</h4>
                   <h5 className="font-extrabold text-base uppercase">DAFTAR PEMILIH TETAP (DPT) - PEMILIHAN UMUM</h5>
-                  <p className="text-[10px] uppercase font-semibold">Desa Wargaluyu, Kecamatan Cicalengka, Kabupaten Bandung, Jawa Barat</p>
-                  <p className="text-[10px] text-slate-600 italic font-medium">Format Hasil Saringan Wilayah Kerja Kepala Dusun & Rukun Tetangga (RT)</p>
+                  <p className="text-[10px] text-slate-700 italic font-medium">Format Hasil Saringan Wilayah Kerja Kepala Dusun & Rukun Tangga (RT)</p>
                 </div>
 
                 {/* Meta details */}
@@ -1499,7 +1519,6 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
                       <th className="text-center font-bold" style={{ width: "45px" }}>UMUR</th>
                       <th className="font-bold">RT/RW</th>
                       <th className="font-bold">STATUS HU_KEL</th>
-                      <th className="font-bold" style={{ width: "100px" }}>TANDA TANGAN / PARAF</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1526,16 +1545,12 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
                             <td className="text-center">{hitungUmur(p.tanggalLahir)} THN</td>
                             <td>RT {p.rt} / RW {p.rw}</td>
                             <td>{p.statusHubungan}</td>
-                            <td className="relative h-8">
-                              <span className="absolute left-1 top-0.5 text-[8px] text-slate-400">{idx + 1}.</span>
-                              <div className={`border-b border-dashed border-slate-300 w-4/5 mx-auto h-5 ${idx % 2 === 0 ? "mr-auto pl-4" : "ml-auto pr-4"}`}></div>
-                            </td>
                           </tr>
                         );
                       })
                     ) : (
                       <tr>
-                        <td colSpan={9} className="text-center py-4 text-slate-500 italic">Tidak ada warga wajib pilih yang memenuhi filter DPT saat ini.</td>
+                        <td colSpan={8} className="text-center py-4 text-slate-500 italic">Tidak ada warga wajib pilih yang memenuhi filter DPT saat ini.</td>
                       </tr>
                     )}
                   </tbody>

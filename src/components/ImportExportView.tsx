@@ -148,6 +148,7 @@ export default function ImportExportView({ currentUser, addToast }: ImportExport
     const headers = [
       "NIK",
       "No KK",
+      "Alamat KK",
       "Nama Lengkap",
       "Jenis Kelamin (L atau P)",
       "Tempat Lahir",
@@ -168,6 +169,7 @@ export default function ImportExportView({ currentUser, addToast }: ImportExport
       [
         "3204123456780001",
         "3204121234560001",
+        "JL. RAYA WARGALUYU NO. 12",
         "BUDI UTOMO",
         "L",
         "BANDUNG",
@@ -186,6 +188,7 @@ export default function ImportExportView({ currentUser, addToast }: ImportExport
       [
         "3204123456780002",
         "3204121234560001",
+        "JL. RAYA WARGALUYU NO. 12",
         "SITI AMINAH",
         "P",
         "TASIKMALAYA",
@@ -278,6 +281,46 @@ export default function ImportExportView({ currentUser, addToast }: ImportExport
           setImportLogs(prev => [...prev, `Menemukan ${rows.length} baris warga untuk diimpor.`]);
           setImportProgress(50);
 
+          const headerIndices: { [key: string]: number } = {};
+          headers.forEach((h, idx) => {
+            const cleanH = h.toLowerCase().trim();
+            if (cleanH.includes("nik")) {
+              headerIndices["nik"] = idx;
+            } else if (cleanH.includes("no kk") || cleanH.includes("no_kk") || cleanH.includes("nomor kk") || cleanH.includes("nomor_kk")) {
+              headerIndices["no_kk"] = idx;
+            } else if (cleanH.includes("alamat") || cleanH.includes("jalan")) {
+              headerIndices["alamat"] = idx;
+            } else if (cleanH.includes("nama")) {
+              headerIndices["nama"] = idx;
+            } else if (cleanH.includes("jenis kelamin") || cleanH.includes("kelamin") || cleanH === "jk" || cleanH.includes("gender") || cleanH.includes("sex")) {
+              headerIndices["jk"] = idx;
+            } else if (cleanH.includes("tempat")) {
+              headerIndices["tempat_lahir"] = idx;
+            } else if (cleanH.includes("tanggal") || cleanH.includes("tgl") || cleanH.includes("lahir")) {
+              headerIndices["tanggal_lahir"] = idx;
+            } else if (cleanH.includes("agama")) {
+              headerIndices["agama"] = idx;
+            } else if (cleanH.includes("didik") || cleanH.includes("sekolah") || cleanH.includes("pendidikan")) {
+              headerIndices["pendidikan"] = idx;
+            } else if (cleanH.includes("kerja") || cleanH.includes("pekerjaan")) {
+              headerIndices["pekerjaan"] = idx;
+            } else if (cleanH.includes("perkawinan") || cleanH.includes("kawin") || cleanH.includes("nikah") || cleanH.includes("marital")) {
+              headerIndices["status_perkawinan"] = idx;
+            } else if (cleanH.includes("hubungan") || cleanH.includes("hub_kel") || cleanH.includes("shdk")) {
+              headerIndices["status_hubungan"] = idx;
+            } else if (cleanH.includes("negara") || cleanH.includes("kewarganegaraan") || cleanH === "wni") {
+              headerIndices["kewarganegaraan"] = idx;
+            } else if (cleanH.includes("hp") || cleanH.includes("telp") || cleanH.includes("phone") || cleanH.includes("kontak")) {
+              headerIndices["no_hp"] = idx;
+            } else if (cleanH.includes("tinggal") || cleanH.includes("domisili")) {
+              headerIndices["status_tinggal"] = idx;
+            } else if (cleanH === "rt" || cleanH.startsWith("rt ") || cleanH.endsWith(" rt")) {
+              headerIndices["rt"] = idx;
+            } else if (cleanH === "rw" || cleanH.startsWith("rw ") || cleanH.endsWith(" rw")) {
+              headerIndices["rw"] = idx;
+            }
+          });
+
           let successCount = 0;
           let failCount = 0;
           const detailLogs: string[] = [];
@@ -286,28 +329,32 @@ export default function ImportExportView({ currentUser, addToast }: ImportExport
             const row = rows[i];
             if (row.length === 0 || (row.length === 1 && row[0] === "")) continue;
 
-            const data: { [key: string]: string } = {};
-            headers.forEach((header, idx) => {
-              data[header] = row[idx] || "";
-            });
+            const getVal = (field: string, defaultIdx: number): string => {
+              const mappedIdx = headerIndices[field];
+              if (mappedIdx !== undefined) {
+                return (row[mappedIdx] || "").trim();
+              }
+              return (row[defaultIdx] || "").trim();
+            };
 
             // Map data
-            const nik = data["nik"] || row[0] || "";
-            const noKk = data["no kk"] || data["no_kk"] || row[1] || "";
-            const namaLengkap = data["nama lengkap"] || data["nama_lengkap"] || row[2] || "";
-            const jenisKelamin = (data["jenis kelamin (l atau p)"] || data["jenis kelamin"] || data["jk"] || row[3] || "").toUpperCase();
-            const tempatLahir = data["tempat lahir"] || data["tempat_lahir"] || row[4] || "";
-            const tanggalLahirInput = data["tanggal lahir (dd-mm-yyyy)"] || data["tanggal lahir"] || row[5] || "";
-            const agama = data["agama"] || row[6] || "Islam";
-            const rawPendidikan = data["pendidikan"] || row[7] || "SLTA / Sederajat";
-            const rawPekerjaan = data["pekerjaan"] || row[8] || "BELUM/TIDAK BEKERJA";
-            const rawStatusPerkawinan = data["status perkawinan"] || data["status_perkawinan"] || row[9] || "Belum Kawin";
-            const rawStatusHubungan = data["status hubungan"] || data["status_hubungan"] || row[10] || "Anak";
-            const kewarganegaraan = (data["kewarganegaraan (wni atau wna)"] || data["kewarganegaraan"] || row[11] || "WNI").toUpperCase();
-            const noHp = data["no hp"] || data["no_hp"] || row[12] || "";
-            const statusTinggal = data["status tinggal (tetap atau kontrak atau sementara)"] || data["status tinggal"] || data["status_tinggal"] || row[13] || "Tetap";
-            const rt = data["rt"] || row[14] || currentUser.rt || "01";
-            const rw = data["rw"] || row[15] || currentUser.rw || "01";
+            const nik = getVal("nik", 0);
+            const noKk = getVal("no_kk", 1);
+            const alamatKk = getVal("alamat", 2);
+            const namaLengkap = getVal("nama", 3);
+            const jenisKelamin = getVal("jk", 4);
+            const tempatLahir = getVal("tempat_lahir", 5);
+            const tanggalLahirInput = getVal("tanggal_lahir", 6);
+            const agama = getVal("agama", 7) || "Islam";
+            const rawPendidikan = getVal("pendidikan", 8) || "SLTA / Sederajat";
+            const rawPekerjaan = getVal("pekerjaan", 9) || "BELUM/TIDAK BEKERJA";
+            const rawStatusPerkawinan = getVal("status_perkawinan", 10) || "Belum Kawin";
+            const rawStatusHubungan = getVal("status_hubungan", 11) || "Anak";
+            const kewarganegaraan = getVal("kewarganegaraan", 12).toUpperCase() || "WNI";
+            const noHp = getVal("no_hp", 13);
+            const statusTinggal = getVal("status_tinggal", 14) || "Tetap";
+            const rt = getVal("rt", 15) || currentUser.rt || "01";
+            const rw = getVal("rw", 16) || currentUser.rw || "01";
 
             if (!nik || nik.length !== 16 || !/^\d+$/.test(nik)) {
               detailLogs.push(`Warga ${i+1} dilewati: NIK harus 16 digit angka (mendapat: "${nik}")`);
@@ -341,7 +388,16 @@ export default function ImportExportView({ currentUser, addToast }: ImportExport
               }
             }
 
-            const cleanJk = jenisKelamin.startsWith("P") ? "P" : "L";
+            const rawJk = jenisKelamin.toUpperCase().trim();
+            let cleanJk: "L" | "P" = "L";
+            if (rawJk === "P" || rawJk === "PEREMPUAN" || rawJk === "WANITA" || rawJk === "FEMALE" || rawJk === "F") {
+              cleanJk = "P";
+            } else if (rawJk === "L" || rawJk === "LAKI-LAKI" || rawJk === "LAKI LAKI" || rawJk === "LAKI" || rawJk === "PRIA" || rawJk === "MALE" || rawJk === "M") {
+              cleanJk = "L";
+            } else {
+              cleanJk = (rawJk.startsWith("P") && !rawJk.startsWith("PR")) ? "P" : "L";
+            }
+
             const cleanKewarganegaraan = kewarganegaraan.startsWith("WNA") ? "WNA" : "WNI";
 
             let cleanStatusTinggal: "Tetap" | "Kontrak" | "Sementara" = "Tetap";
@@ -374,7 +430,8 @@ export default function ImportExportView({ currentUser, addToast }: ImportExport
                 noHp,
                 statusTinggal: cleanStatusTinggal,
                 rt: rt.toString().padStart(2, "0"),
-                rw: rw.toString().padStart(2, "0")
+                rw: rw.toString().padStart(2, "0"),
+                alamat: alamatKk ? alamatKk.trim().toUpperCase() : undefined
               }, currentUser);
               successCount++;
             } catch (err: any) {

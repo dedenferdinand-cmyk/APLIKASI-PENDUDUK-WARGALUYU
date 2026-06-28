@@ -1020,7 +1020,7 @@ export class MockSupabaseClient {
     return this.applyRLSFilter(raw, user);
   }
 
-  async insertPenduduk(p: Omit<Penduduk, "id" | "tanggalInput">, user: User): Promise<Penduduk> {
+  async insertPenduduk(p: Omit<Penduduk, "id" | "tanggalInput"> & { alamat?: string }, user: User): Promise<Penduduk> {
     if (!this.validateRLSWrite(p, user)) {
       throw new Error("RLS Violation! Anda tidak memiliki izin menulis data penduduk wilayah RT/RW ini.");
     }
@@ -1032,8 +1032,9 @@ export class MockSupabaseClient {
       throw new Error(`Data Ganda! Penduduk dengan NIK ${p.nik} sudah terdaftar di database.`);
     }
 
+    const { alamat, ...pendudukData } = p;
     const newP: Penduduk = {
-      ...p,
+      ...pendudukData,
       id: "p-" + Math.random().toString(36).substring(2, 9),
       tanggalInput: new Date().toISOString()
     };
@@ -1042,7 +1043,7 @@ export class MockSupabaseClient {
     this.supUpsert("penduduk", newP);
 
     // Auto update KK members block
-    this.recalculateKkAnggotaCount(p.noKk);
+    this.recalculateKkAnggotaCount(p.noKk, alamat);
 
     this.addLog(user, `Menambahkan Penduduk baru NIK: ${p.nik}, Nama: ${p.namaLengkap} di RT ${p.rt}/RW ${p.rw}`);
     return newP;
@@ -1232,7 +1233,7 @@ export class MockSupabaseClient {
   }
 
   // Helper calculation logic
-  private recalculateKkAnggotaCount(noKk: string) {
+  private recalculateKkAnggotaCount(noKk: string, alamat?: string) {
     const penduduk = this.getItems<Penduduk>(STORAGE_KEYS.PENDUDUK);
     const keluarga = this.getItems<Keluarga>(STORAGE_KEYS.KELUARGA);
     const familyMembers = penduduk.filter(p => p.noKk === noKk);
@@ -1258,6 +1259,9 @@ export class MockSupabaseClient {
         keluarga[index].kepalaKeluargaId = headOfFamily.id;
         keluarga[index].kepalaKeluargaNama = headOfFamily.namaLengkap;
       }
+      if (alamat && alamat.trim() !== "") {
+        keluarga[index].alamat = alamat;
+      }
       this.saveItems(STORAGE_KEYS.KELUARGA, keluarga, true);
       this.supUpsert("keluarga", keluarga[index]);
     } else {
@@ -1267,7 +1271,7 @@ export class MockSupabaseClient {
         noKk: noKk,
         kepalaKeluargaId: headOfFamily ? headOfFamily.id : "",
         kepalaKeluargaNama: headOfFamily ? headOfFamily.namaLengkap : "BELUM ADA KEPALA KELUARGA",
-        alamat: "DUSUN I WARGALUYU",
+        alamat: (alamat && alamat.trim() !== "") ? alamat : "DUSUN I WARGALUYU",
         rw: headOfFamily ? headOfFamily.rw : "01",
         rt: headOfFamily ? headOfFamily.rt : "01",
         jumlahAnggota: count
