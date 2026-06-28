@@ -91,22 +91,61 @@ export default function DashboardView({ currentUser, addToast, onNavigate }: Das
     return umur >= 60;
   }).length;
 
-  // 2. CHART PREPARATION (DYNAMIC BASED ON DATABASE)
-  // Chart A: Residents per RW
-  const rws = Array.from(new Set(pendudukList.map(p => p.rw))).sort();
-  const pendudukPerRwData = rws.map(rwNum => {
-    const inRw = pendudukList.filter(p => p.rw === rwNum);
-    // Find RT levels
-    const rts = Array.from(new Set(inRw.map(p => p.rt))).sort();
-    const rtBreakdownDetails = rts.map(rtNum => `RT ${rtNum}: ${inRw.filter(p => p.rt === rtNum).length}`).join(", ");
+  // 2. CHART PREPARATION (DYNAMIC BASED ON DATABASE & ROLE)
+  const isRwAccount = currentUser.role === "KETUA_RW";
+  const isRtAccount = currentUser.role === "KETUA_RT";
 
-    return {
-      name: `RW ${rwNum}`,
-      "Jumlah Penduduk": inRw.length,
-      "Kartu Keluarga": keluargaList.filter(k => k.rw === rwNum).length,
-      detail: rtBreakdownDetails || "Tidak ada data RT"
-    };
-  });
+  let demografiChartData: any[] = [];
+  let demografiTitle = "Demografi Penduduk per RW";
+  let demografiDesc = "Membandingkan total penduduk setiap wilayah kelurahan";
+  let demografiFooter = "Data mencakup seluruh sub-RT di bawah RW Anda.";
+
+  if (isRwAccount) {
+    demografiTitle = `Demografi Penduduk per RT (RW ${currentUser.rw})`;
+    demografiDesc = `Membandingkan total penduduk dan kepala keluarga di setiap RT di RW ${currentUser.rw}`;
+    demografiFooter = `Data mencakup seluruh RT aktif di wilayah RW ${currentUser.rw}.`;
+
+    const foundRts = Array.from(new Set(pendudukList.filter(p => p.rw === currentUser.rw).map(p => p.rt))).sort();
+    const rtList = foundRts.length > 0 ? foundRts : ["01", "02", "03"];
+
+    demografiChartData = rtList.map(rtNum => {
+      const inRt = pendudukList.filter(p => p.rw === currentUser.rw && p.rt === rtNum);
+      return {
+        name: `RT ${rtNum}`,
+        "Jumlah Penduduk": inRt.length,
+        "Kartu Keluarga": keluargaList.filter(k => k.rw === currentUser.rw && k.rt === rtNum).length
+      };
+    });
+  } else if (isRtAccount) {
+    demografiTitle = `Demografi Penduduk RT ${currentUser.rt}/RW ${currentUser.rw}`;
+    demografiDesc = "Membandingkan komposisi penduduk berdasarkan status tinggal";
+    demografiFooter = `Data mencakup wilayah RT ${currentUser.rt} / RW ${currentUser.rw}.`;
+
+    const statuses = ["Tetap", "Kontrak", "Sementara"];
+    demografiChartData = statuses.map(status => {
+      const count = pendudukList.filter(p => p.rw === currentUser.rw && p.rt === currentUser.rt && p.statusTinggal === status).length;
+      return {
+        name: status,
+        "Jumlah Penduduk": count,
+        "Kartu Keluarga": 0
+      };
+    });
+  } else {
+    const rws = Array.from(new Set(pendudukList.map(p => p.rw))).sort();
+    const rwsList = rws.length > 0 ? rws : ["01", "02"];
+    demografiChartData = rwsList.map(rwNum => {
+      const inRw = pendudukList.filter(p => p.rw === rwNum);
+      const rts = Array.from(new Set(inRw.map(p => p.rt))).sort();
+      const rtBreakdownDetails = rts.map(rtNum => `RT ${rtNum}: ${inRw.filter(p => p.rt === rtNum).length}`).join(", ");
+
+      return {
+        name: `RW ${rwNum}`,
+        "Jumlah Penduduk": inRw.length,
+        "Kartu Keluarga": keluargaList.filter(k => k.rw === rwNum).length,
+        detail: rtBreakdownDetails || "Tidak ada data RT"
+      };
+    });
+  }
 
   // Chart B: Gender (Laki-laki vs Perempuan)
   const genderData = [
@@ -260,16 +299,16 @@ export default function DashboardView({ currentUser, addToast, onNavigate }: Das
       {/* DASHBOARD GRAPHS CONTAINER */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Graph 1: Penduduk per RW */}
+        {/* Graph 1: Demografi Wilayah */}
         <div className="p-5 rounded-2xl bg-white/60 dark:bg-slate-900/60 border border-white/40 dark:border-white/10 shadow-sm flex flex-col justify-between backdrop-blur-lg">
           <div className="mb-4">
-            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">Demografi Penduduk per RW</h3>
-            <p className="text-[11px] text-slate-400 mt-0.5">Membandingkan total penduduk setiap wilayah kelurahan</p>
+            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">{demografiTitle}</h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">{demografiDesc}</p>
           </div>
           <div className="h-64 w-full">
-            {pendudukPerRwData.length > 0 ? (
+            {demografiChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={pendudukPerRwData} margin={{ top: 10, right: 5, left: -25, bottom: 5 }}>
+                <BarChart data={demografiChartData} margin={{ top: 10, right: 5, left: -25, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" className="dark:stroke-slate-800" />
                   <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} />
                   <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
@@ -278,7 +317,7 @@ export default function DashboardView({ currentUser, addToast, onNavigate }: Das
                     itemStyle={{ color: "#0f172a" }}
                   />
                   <Bar dataKey="Jumlah Penduduk" fill="#10b981" radius={[4, 4, 0, 0]} barSize={34} />
-                  <Bar dataKey="Kartu Keluarga" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={20} />
+                  {!isRtAccount && <Bar dataKey="Kartu Keluarga" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={20} />}
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -286,7 +325,7 @@ export default function DashboardView({ currentUser, addToast, onNavigate }: Das
             )}
           </div>
           <div className="text-[10px] text-slate-400 border-t border-slate-200/50 dark:border-slate-800/50 pt-2.5 mt-2">
-            Data mencakup seluruh sub-RT di bawah RW Anda.
+            {demografiFooter}
           </div>
         </div>
 

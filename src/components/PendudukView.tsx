@@ -35,6 +35,40 @@ interface PendudukViewProps {
   addToast: (msg: string, type: "success" | "error" | "warning" | "info") => void;
 }
 
+const STANDARD_PEKERJAAN_LIST = [
+  "BELUM/TIDAK BEKERJA",
+  "MENGURUS RUMAH TANGGA",
+  "PELAJAR/MAHASISWA",
+  "PENSIUNAN",
+  "PEGAWAI NEGERI SIPIL",
+  "TENTARA NASIONAL INDONESIA",
+  "KEPOLISIAN RI",
+  "KARYAWAN SWASTA",
+  "KARYAWAN BUMN",
+  "KARYAWAN BUMD",
+  "BURUH HARIAN LEPAS",
+  "PETANI/PEKEBUN",
+  "PETERNAK",
+  "NELAYAN/PERIKANAN",
+  "PEDAGANG",
+  "WIRASWASTA",
+  "GURU / DOSEN",
+  "MEDIK / DOKTER / BIDAN",
+  "KONSTRUKSI",
+  "SENIMAN"
+];
+
+const formatDobInput = (val: string): string => {
+  const clean = val.replace(/\D/g, "");
+  if (clean.length <= 2) {
+    return clean;
+  }
+  if (clean.length <= 4) {
+    return `${clean.slice(0, 2)}-${clean.slice(2)}`;
+  }
+  return `${clean.slice(0, 2)}-${clean.slice(2, 4)}-${clean.slice(4, 8)}`;
+};
+
 export default function PendudukView({ currentUser, addToast }: PendudukViewProps) {
   const [pendudukList, setPendudukList] = useState<Penduduk[]>([]);
   const [kkList, setKkList] = useState<Keluarga[]>([]);
@@ -67,7 +101,9 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
   const [jenisKelamin, setJenisKelamin] = useState<"L" | "P">("L");
   const [agama, setAgama] = useState("Islam");
   const [pendidikan, setPendidikan] = useState("SLTA / Sederajat");
-  const [pekerjaan, setPekerjaan] = useState("Karyawan Swasta");
+  const [pekerjaan, setPekerjaan] = useState("BELUM/TIDAK BEKERJA");
+  const [customPekerjaan, setCustomPekerjaan] = useState("");
+  const [dobInput, setDobInput] = useState("");
   const [statusPerkawinan, setStatusPerkawinan] = useState("Belum Kawin");
   const [statusHubungan, setStatusHubungan] = useState("Anak");
   const [kewarganegaraan, setKewarganegaraan] = useState<"WNI" | "WNA">("WNI");
@@ -124,10 +160,12 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
     setNamaLengkap("");
     setTempatLahir("");
     setTanggalLahir("2000-01-01");
+    setDobInput("01-01-2000");
     setJenisKelamin("L");
     setAgama("Islam");
     setPendidikan("SLTA / Sederajat");
-    setPekerjaan("Karyawan Swasta");
+    setPekerjaan("BELUM/TIDAK BEKERJA");
+    setCustomPekerjaan("");
     setStatusPerkawinan("Belum Kawin");
     setStatusHubungan("Anak");
     setKewarganegaraan("WNI");
@@ -163,10 +201,28 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
     setNamaLengkap(p.namaLengkap);
     setTempatLahir(p.tempatLahir);
     setTanggalLahir(p.tanggalLahir);
+    
+    // Map date to DD-MM-YYYY
+    const dateParts = p.tanggalLahir.split("-");
+    if (dateParts.length === 3) {
+      setDobInput(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`);
+    } else {
+      setDobInput("");
+    }
+
     setJenisKelamin(p.jenisKelamin);
     setAgama(p.agama);
     setPendidikan(p.pendidikan);
-    setPekerjaan(p.pekerjaan);
+    
+    // Map job to standard list or custom
+    if (STANDARD_PEKERJAAN_LIST.includes(p.pekerjaan)) {
+      setPekerjaan(p.pekerjaan);
+      setCustomPekerjaan("");
+    } else {
+      setPekerjaan("LAINNYA");
+      setCustomPekerjaan(p.pekerjaan);
+    }
+
     setStatusPerkawinan(p.statusPerkawinan);
     setStatusHubungan(p.statusHubungan);
     setKewarganegaraan(p.kewarganegaraan);
@@ -213,21 +269,52 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
       return;
     }
 
-    if (!namaLengkap.trim() || !tempatLahir.trim() || !tanggalLahir) {
+    // Validate dobInput format (DD-MM-YYYY)
+    const dobRegex = /^\d{2}-\d{2}-\d{4}$/;
+    if (!dobRegex.test(dobInput)) {
+      addToast("Format Tanggal Lahir tidak valid! Gunakan format DD-MM-YYYY (contoh: 03-08-1989)", "warning");
+      return;
+    }
+    const parts = dobInput.split("-");
+    const d = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    const y = parseInt(parts[2], 10);
+    if (d < 1 || d > 31 || m < 1 || m > 12 || y < 1900 || y > new Date().getFullYear() + 1) {
+      addToast("Tanggal Lahir tidak masuk akal!", "warning");
+      return;
+    }
+    const finalTanggalLahir = `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+
+    const uppercaseNamaLengkap = namaLengkap.trim().toUpperCase();
+    const uppercaseTempatLahir = tempatLahir.trim().toUpperCase();
+
+    if (!uppercaseNamaLengkap || !uppercaseTempatLahir || !finalTanggalLahir) {
       addToast("Mohon lengkapi seluruh kolom formulir!", "warning");
       return;
+    }
+
+    // Handle pekerjaan (occupation) logic
+    let finalPekerjaan = pekerjaan;
+    if (pekerjaan === "LAINNYA") {
+      if (!customPekerjaan.trim()) {
+        addToast("Silakan isi kolom pekerjaan manual!", "warning");
+        return;
+      }
+      finalPekerjaan = customPekerjaan.trim().toUpperCase();
+    } else {
+      finalPekerjaan = pekerjaan.toUpperCase();
     }
 
     const payload = {
       nik,
       noKk,
-      namaLengkap: namaLengkap.trim(),
-      tempatLahir: tempatLahir.trim(),
-      tanggalLahir,
+      namaLengkap: uppercaseNamaLengkap,
+      tempatLahir: uppercaseTempatLahir,
+      tanggalLahir: finalTanggalLahir,
       jenisKelamin,
       agama,
       pendidikan,
-      pekerjaan,
+      pekerjaan: finalPekerjaan,
       statusPerkawinan,
       statusHubungan,
       kewarganegaraan,
@@ -237,7 +324,7 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
       rt: rt.padStart(2, "0"),
       isDisabilitas,
       jenisDisabilitas: isDisabilitas ? jenisDisabilitas : "",
-      avatar: getCartoonAvatar(jenisKelamin, tanggalLahir, namaLengkap)
+      avatar: getCartoonAvatar(jenisKelamin, finalTanggalLahir, uppercaseNamaLengkap)
     };
 
     try {
@@ -286,6 +373,8 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
       matchesUsia = age >= 18 && age <= 59;
     } else if (filterUsia === "lansia") {
       matchesUsia = age >= 60;
+    } else if (filterUsia === "dpt") {
+      matchesUsia = age >= 17;
     }
 
     // Filter Pendidikan
@@ -474,6 +563,7 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
               className="bg-transparent text-xs font-bold text-slate-750 dark:text-slate-200 focus:outline-none pr-1 select-none"
             >
               <option value="">Semua Kategori</option>
+              <option value="dpt">Wajib Pilih / DPT (≥ 17 thn) 🗳️</option>
               <option value="bayi">Bayi (0 - 2 thn)</option>
               <option value="anak">Anak-anak (3 - 12 thn)</option>
               <option value="remaja">Remaja (13 - 17 thn)</option>
@@ -542,6 +632,22 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
               <option value="LAINNYA">LAINNYA</option>
             </select>
           </div>
+
+          {/* Quick Filter DPT 17+ Button */}
+          <button
+            onClick={() => {
+              setFilterUsia(filterUsia === "dpt" ? "" : "dpt");
+              setCurrentPage(1);
+            }}
+            className={`text-[10px] font-bold py-1 px-2.5 rounded-xl border transition-all cursor-pointer select-none flex items-center gap-1 ${
+              filterUsia === "dpt"
+                ? "bg-amber-600 border-amber-600 text-white shadow-sm shadow-amber-600/10"
+                : "text-slate-600 dark:text-slate-350 hover:text-slate-800 dark:hover:text-slate-200 bg-slate-50 dark:bg-slate-950/40 hover:bg-slate-100 dark:hover:bg-slate-900 border-slate-200 dark:border-slate-800"
+            }`}
+            title="Saring cepat warga wajib pilih usia 17 tahun ke atas"
+          >
+            🗳️ DPT (17+) {filterUsia === "dpt" ? "AKTIF" : ""}
+          </button>
 
           {/* Reset button */}
           {(filterRw !== "" || filterRt !== "" || filterStatus !== "" || filterUsia !== "" || filterPendidikan !== "" || filterPekerjaan !== "" || filterUmurMin !== "" || filterUmurMax !== "") && (
@@ -770,7 +876,7 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
                   required
                   placeholder="Masukkan nama lengkap warga"
                   value={namaLengkap}
-                  onChange={(e) => setNamaLengkap(e.target.value)}
+                  onChange={(e) => setNamaLengkap(e.target.value.toUpperCase())}
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/20 text-xs text-slate-850 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 font-bold"
                 />
               </div>
@@ -784,23 +890,41 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
                     required
                     placeholder="Contoh: Bandung, Tasikmalaya, dll"
                     value={tempatLahir}
-                    onChange={(e) => setTempatLahir(e.target.value)}
+                    onChange={(e) => setTempatLahir(e.target.value.toUpperCase())}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/20 text-xs text-slate-850 dark:text-slate-100 focus:outline-none"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Tanggal Lahir (Untuk Penghitungan Umur)</label>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400" /> Tanggal Lahir (Format: DD-MM-YYYY)
+                  </label>
                   <div className="relative">
-                    <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500 pointer-events-none" />
                     <input
-                      type="date"
+                      type="text"
+                      placeholder="Contoh: 03-08-1989"
+                      maxLength={10}
                       required
-                      value={tanggalLahir}
-                      onChange={(e) => setTanggalLahir(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/20 text-xs text-slate-850 dark:text-slate-100 focus:outline-none"
+                      value={dobInput}
+                      onChange={(e) => {
+                        const formatted = formatDobInput(e.target.value);
+                        setDobInput(formatted);
+                        
+                        // Try to parse to YYYY-MM-DD in the background for system compatibility
+                        const parts = formatted.split("-");
+                        if (parts.length === 3) {
+                          const d = parts[0];
+                          const m = parts[1];
+                          const y = parts[2];
+                          if (d.length === 2 && m.length === 2 && y.length === 4) {
+                            setTanggalLahir(`${y}-${m}-${d}`);
+                          }
+                        }
+                      }}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/20 text-xs text-slate-850 dark:text-slate-100 focus:outline-none font-mono"
                     />
                   </div>
+                  <p className="text-[9px] text-slate-400">Ketik angka saja, tanda hubung (-) otomatis terisi.</p>
                 </div>
 
               </div>
@@ -913,8 +1037,14 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
                     <Briefcase className="w-3.5 h-3.5 text-slate-400" /> Jenis Pekerjaan Utama
                   </label>
                   <select
-                    value={pekerjaan}
-                    onChange={(e) => setPekerjaan(e.target.value)}
+                    value={STANDARD_PEKERJAAN_LIST.includes(pekerjaan) ? pekerjaan : "LAINNYA"}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPekerjaan(val);
+                      if (val !== "LAINNYA") {
+                        setCustomPekerjaan("");
+                      }
+                    }}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/20 text-xs text-slate-850 dark:text-slate-100 focus:outline-none"
                   >
                     <option value="BELUM/TIDAK BEKERJA">BELUM/TIDAK BEKERJA</option>
@@ -937,8 +1067,22 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
                     <option value="MEDIK / DOKTER / BIDAN">MEDIK / DOKTER / BIDAN</option>
                     <option value="KONSTRUKSI">KONSTRUKSI</option>
                     <option value="SENIMAN">SENIMAN</option>
-                    <option value="LAINNYA">LAINNYA</option>
+                    <option value="LAINNYA">LAINNYA / TULIS MANUAL</option>
                   </select>
+
+                  {(pekerjaan === "LAINNYA" || !STANDARD_PEKERJAAN_LIST.includes(pekerjaan)) && (
+                    <div className="mt-2 animate-in fade-in slide-in-from-top-1 duration-150">
+                      <input
+                        type="text"
+                        placeholder="Tulis jenis pekerjaan secara manual (Contoh: SOPIR, DESAINER)"
+                        required
+                        value={customPekerjaan}
+                        onChange={(e) => setCustomPekerjaan(e.target.value.toUpperCase())}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs text-slate-850 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-bold"
+                      />
+                      <p className="text-[9px] text-slate-400 mt-0.5">Jenis pekerjaan akan otomatis disimpan dalam HURUF KAPITAL.</p>
+                    </div>
+                  )}
                 </div>
 
               </div>
