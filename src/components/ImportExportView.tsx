@@ -20,6 +20,76 @@ import {
 import { User, Penduduk, Keluarga } from "../types";
 import { db } from "../db/mockSupabase";
 
+// ROBUST IMPORT Normalizer HELPERS
+const cleanStatusHubungan = (val: string): string => {
+  const s = val.trim().toLowerCase();
+  if (s.includes("kepala") || s === "kk") return "Kepala Keluarga";
+  if (s.includes("suami")) return "Suami";
+  if (s.includes("istri") || s.includes("isteri")) return "Isteri";
+  if (s.includes("anak")) return "Anak";
+  if (s.includes("menantu")) return "Menantu";
+  if (s.includes("cucu")) return "Cucu";
+  if (s.includes("orang") && s.includes("tua")) return "Orang Tua";
+  if (s.includes("mertua")) return "Mertua";
+  if (s.includes("pembantu")) return "Pembantu";
+  if (s.includes("famili") || s.includes("keluarga")) return "Famili Lain";
+  return val.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ") || "Anak";
+};
+
+const cleanPendidikan = (val: string): string => {
+  const p = val.trim().toLowerCase();
+  if (p.includes("tidak") || p.includes("belum sekolah")) return "Tidak / Belum Sekolah";
+  if (p.includes("belum tamat sd")) return "Belum Tamat SD / Sederajat";
+  if (p.includes("tamat sd") || p === "sd") return "Tamat SD / Sederajat";
+  if (p.includes("sltp") || p.includes("smp")) return "SLTP / Sederajat";
+  if (p.includes("slta") || p.includes("sma") || p.includes("smk") || p.includes("sederajat")) return "SLTA / Sederajat";
+  if (p.includes("diploma i") || p.includes("diploma ii") || p.includes("d1") || p.includes("d2") || p === "d-1" || p === "d-2") return "Diploma I / II";
+  if (p.includes("diploma iii") || p.includes("d3") || p === "d-3") return "Diploma III";
+  if (p.includes("diploma iv") || p.includes("strata i") || p.includes("s1") || p === "s-1" || p === "div") return "Diploma IV / Strata I";
+  if (p.includes("strata ii") || p.includes("s2") || p === "s-2") return "Strata II";
+  if (p.includes("strata iii") || p.includes("s3") || p === "s-3") return "Strata III";
+  
+  if (p.includes("smp")) return "SLTP / Sederajat";
+  if (p.includes("sma") || p.includes("smk")) return "SLTA / Sederajat";
+  if (p.includes("sarjana")) return "Diploma IV / Strata I";
+  
+  return val.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+};
+
+const cleanPekerjaan = (val: string): string => {
+  const job = val.trim().toUpperCase();
+  if (job.includes("BELUM") || job.includes("TIDAK BEKERJA") || job === "TIDAK BEKERJA") return "BELUM/TIDAK BEKERJA";
+  if (job.includes("MENGURUS") || job.includes("RUMAH TANGGA") || job === "IRT") return "MENGURUS RUMAH TANGGA";
+  if (job.includes("PELAJAR") || job.includes("MAHASISWA") || job === "SISWA" || job === "KULIAH") return "PELAJAR/MAHASISWA";
+  if (job.includes("PENSIUN") || job === "PENSIUNAN") return "PENSIUNAN";
+  if (job.includes("PEGAWAI NEGERI") || job === "PNS" || job.includes("PNS")) return "PEGAWAI NEGERI SIPIL";
+  if (job.includes("TNI") || job.includes("TENTARA")) return "TENTARA NASIONAL INDONESIA";
+  if (job.includes("POLRI") || job.includes("POLISI") || job === "KEPOLISIAN") return "KEPOLISIAN RI";
+  if (job.includes("KARYAWAN SWASTA") || job === "SWASTA") return "KARYAWAN SWASTA";
+  if (job.includes("BUMN")) return "KARYAWAN BUMN";
+  if (job.includes("BUMD")) return "KARYAWAN BUMD";
+  if (job.includes("BURUH") || job.includes("LEPAS")) return "BURUH HARIAN LEPAS";
+  if (job.includes("PETANI") || job.includes("KEBUN")) return "PETANI/PEKEBUN";
+  if (job.includes("TERNAK") || job === "PETERNAK") return "PETERNAK";
+  if (job.includes("NELAYAN") || job.includes("IKAN")) return "NELAYAN/PERIKANAN";
+  if (job.includes("DAGANG") || job === "PEDAGANG") return "PEDAGANG";
+  if (job.includes("WIRA") || job === "WIRASWASTA") return "WIRASWASTA";
+  if (job.includes("GURU") || job.includes("DOSEN")) return "GURU / DOSEN";
+  if (job.includes("DOKTER") || job.includes("BIDAN") || job.includes("MEDIS") || job.includes("MEDIK")) return "MEDIK / DOKTER / BIDAN";
+  if (job.includes("TUKANG") || job.includes("BANGUNAN") || job === "KONSTRUKSI") return "KONSTRUKSI";
+  if (job.includes("SENI") || job === "SENIMAN") return "SENIMAN";
+  return job || "BELUM/TIDAK BEKERJA";
+};
+
+const cleanStatusPerkawinan = (val: string): string => {
+  const s = val.trim().toLowerCase();
+  if (s.includes("belum")) return "Belum Kawin";
+  if (s.includes("cerai hidup") || s === "cerai") return "Cerai Hidup";
+  if (s.includes("cerai mati") || s.includes("mati")) return "Cerai Mati";
+  if (s.includes("kawin") || s === "menikah" || s === "nikah") return "Kawin";
+  return "Belum Kawin";
+};
+
 interface ImportExportProps {
   currentUser: User;
   addToast: (msg: string, type: "success" | "error" | "warning" | "info") => void;
@@ -229,10 +299,10 @@ export default function ImportExportView({ currentUser, addToast }: ImportExport
             const tempatLahir = data["tempat lahir"] || data["tempat_lahir"] || row[4] || "";
             const tanggalLahirInput = data["tanggal lahir (dd-mm-yyyy)"] || data["tanggal lahir"] || row[5] || "";
             const agama = data["agama"] || row[6] || "Islam";
-            const pendidikan = data["pendidikan"] || row[7] || "SLTA / Sederajat";
-            const pekerjaan = (data["pekerjaan"] || row[8] || "BELUM/TIDAK BEKERJA").toUpperCase();
-            const statusPerkawinan = data["status perkawinan"] || data["status_perkawinan"] || row[9] || "Belum Kawin";
-            const statusHubungan = data["status hubungan"] || data["status_hubungan"] || row[10] || "Anak";
+            const rawPendidikan = data["pendidikan"] || row[7] || "SLTA / Sederajat";
+            const rawPekerjaan = data["pekerjaan"] || row[8] || "BELUM/TIDAK BEKERJA";
+            const rawStatusPerkawinan = data["status perkawinan"] || data["status_perkawinan"] || row[9] || "Belum Kawin";
+            const rawStatusHubungan = data["status hubungan"] || data["status_hubungan"] || row[10] || "Anak";
             const kewarganegaraan = (data["kewarganegaraan (wni atau wna)"] || data["kewarganegaraan"] || row[11] || "WNI").toUpperCase();
             const noHp = data["no hp"] || data["no_hp"] || row[12] || "";
             const statusTinggal = data["status tinggal (tetap atau kontrak atau sementara)"] || data["status tinggal"] || data["status_tinggal"] || row[13] || "Tetap";
@@ -281,6 +351,12 @@ export default function ImportExportView({ currentUser, addToast }: ImportExport
               cleanStatusTinggal = "Sementara";
             }
 
+            // Apply robust normalizers
+            const cleanHubunganVal = cleanStatusHubungan(rawStatusHubungan);
+            const cleanPendidikanVal = cleanPendidikan(rawPendidikan);
+            const cleanPekerjaanVal = cleanPekerjaan(rawPekerjaan);
+            const cleanPerkawinanVal = cleanStatusPerkawinan(rawStatusPerkawinan);
+
             try {
               await db.insertPenduduk({
                 nik,
@@ -290,10 +366,10 @@ export default function ImportExportView({ currentUser, addToast }: ImportExport
                 tanggalLahir: formattedDate,
                 jenisKelamin: cleanJk,
                 agama,
-                pendidikan,
-                pekerjaan: pekerjaan,
-                statusPerkawinan,
-                statusHubungan,
+                pendidikan: cleanPendidikanVal,
+                pekerjaan: cleanPekerjaanVal,
+                statusPerkawinan: cleanPerkawinanVal,
+                statusHubungan: cleanHubunganVal,
                 kewarganegaraan: cleanKewarganegaraan,
                 noHp,
                 statusTinggal: cleanStatusTinggal,

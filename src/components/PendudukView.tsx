@@ -25,7 +25,8 @@ import {
   Heart,
   Globe2,
   MapPin,
-  Contact
+  Contact,
+  Printer
 } from "lucide-react";
 import { User as UserType, Penduduk, Keluarga } from "../types";
 import { db, hitungUmur, getCartoonAvatar } from "../db/mockSupabase";
@@ -116,6 +117,9 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
 
   // Citizen Detail Modal state
   const [selectedPenduduk, setSelectedPenduduk] = useState<Penduduk | null>(null);
+
+  // Print Modal State for DPT
+  const [isPrintOpen, setIsPrintOpen] = useState(false);
 
   // Custom Confirmation Modal state to bypass browser window.confirm constraints inside sandboxed iframes
   const [confirmModal, setConfirmModal] = useState<{
@@ -648,6 +652,17 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
           >
             🗳️ DPT (17+) {filterUsia === "dpt" ? "AKTIF" : ""}
           </button>
+
+          {/* Cetak DPT PDF button */}
+          {filterUsia === "dpt" && (
+            <button
+              onClick={() => setIsPrintOpen(true)}
+              className="text-[10px] font-bold py-1 px-2.5 rounded-xl border border-blue-200 dark:border-blue-800/80 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 transition-all cursor-pointer select-none flex items-center gap-1 animate-in fade-in duration-200"
+              title="Cetak Daftar Pemilih Tetap (DPT)"
+            >
+              <Printer className="w-3.5 h-3.5" /> Cetak DPT (PDF)
+            </button>
+          )}
 
           {/* Reset button */}
           {(filterRw !== "" || filterRt !== "" || filterStatus !== "" || filterUsia !== "" || filterPendidikan !== "" || filterPekerjaan !== "" || filterUmurMin !== "" || filterUmurMax !== "") && (
@@ -1390,6 +1405,192 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Print Modal State for DPT */}
+      {isPrintOpen && (
+        <div className="fixed inset-0 bg-slate-900/65 backdrop-blur-sm flex items-center justify-center p-4 z-[9990] overflow-y-auto no-print">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-5xl w-full p-6 shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col justify-between">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Printer className="w-5 h-5 text-amber-500 animate-pulse" />
+                <h3 className="text-sm font-extrabold text-slate-850 dark:text-white uppercase tracking-wider">
+                  Pratinjau Cetak Daftar Pemilih Tetap (DPT)
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsPrintOpen(false)}
+                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-350 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Scrollable Document Area */}
+            <div className="flex-1 overflow-y-auto border border-slate-150 dark:border-slate-800 p-8 rounded-xl bg-slate-50 dark:bg-slate-950/20 max-h-[60vh]">
+              {/* This is the printable document element */}
+              <div id="sidewa-printable-area" className="bg-white p-10 shadow-sm border border-slate-100 text-slate-900 font-sans mx-auto max-w-[21cm] min-h-[29.7cm] text-[12px] leading-relaxed">
+                {/* Print inline styling */}
+                <style>{`
+                  @media print {
+                    body * {
+                      visibility: hidden !important;
+                    }
+                    #sidewa-printable-area, #sidewa-printable-area * {
+                      visibility: visible !important;
+                    }
+                    #sidewa-printable-area {
+                      position: absolute !important;
+                      left: 0 !important;
+                      top: 0 !important;
+                      width: 100% !important;
+                      padding: 0 !important;
+                      border: none !important;
+                      box-shadow: none !important;
+                      color: #000 !important;
+                      background: #fff !important;
+                    }
+                    .no-print {
+                      display: none !important;
+                    }
+                  }
+                  .dpt-table th, .dpt-table td {
+                    border: 1px solid #000 !important;
+                    padding: 4px 6px !important;
+                    text-align: left;
+                  }
+                `}</style>
+
+                {/* Document Kop */}
+                <div className="text-center space-y-1 pb-4 border-b-2 border-double border-black">
+                  <h4 className="font-bold text-sm tracking-wide uppercase">PANITIA PEMUNGUTAN SUARA (PPS) DESA WARGALUYU</h4>
+                  <h5 className="font-extrabold text-base uppercase">DAFTAR PEMILIH TETAP (DPT) - PEMILIHAN UMUM</h5>
+                  <p className="text-[10px] uppercase font-semibold">Desa Wargaluyu, Kecamatan Cicalengka, Kabupaten Bandung, Jawa Barat</p>
+                  <p className="text-[10px] text-slate-600 italic font-medium">Format Hasil Saringan Wilayah Kerja Kepala Dusun & Rukun Tetangga (RT)</p>
+                </div>
+
+                {/* Meta details */}
+                <div className="grid grid-cols-2 gap-4 my-4 font-semibold text-[11px]">
+                  <div>
+                    <p>PROVINSI : JAWA BARAT</p>
+                    <p>KABUPATEN : BANDUNG</p>
+                    <p>KECAMATAN : CICALENGKA</p>
+                    <p>DESA / KELURAHAN : WARGALUYU</p>
+                  </div>
+                  <div className="text-right">
+                    <p>RW : {filterRw || "SEMUA RW"}</p>
+                    <p>RT : {filterRt || "SEMUA RT"}</p>
+                    <p>JUMLAH WAJIB PILIH : {filteredPenduduk.length} JIWA</p>
+                    <p>TANGGAL CETAK : {new Date().toLocaleDateString("id-ID", { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                  </div>
+                </div>
+
+                {/* Table */}
+                <table className="w-full border-collapse dpt-table text-[10px] mt-2">
+                  <thead>
+                    <tr className="bg-slate-100">
+                      <th className="text-center font-bold" style={{ width: "30px" }}>NO</th>
+                      <th className="font-bold">NAMA LENGKAP</th>
+                      <th className="font-bold">NIK</th>
+                      <th className="font-bold">TEMPAT, TGL LAHIR</th>
+                      <th className="text-center font-bold" style={{ width: "35px" }}>JK</th>
+                      <th className="text-center font-bold" style={{ width: "45px" }}>UMUR</th>
+                      <th className="font-bold">RT/RW</th>
+                      <th className="font-bold">STATUS HU_KEL</th>
+                      <th className="font-bold" style={{ width: "100px" }}>TANDA TANGAN / PARAF</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredPenduduk.length > 0 ? (
+                      filteredPenduduk.map((p, idx) => {
+                        // format tanggal lahir to DD-MM-YYYY
+                        let formattedDob = "2000-01-01";
+                        try {
+                          if (p.tanggalLahir) {
+                            const dateParts = p.tanggalLahir.split("-");
+                            if (dateParts.length === 3) {
+                              formattedDob = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`;
+                            }
+                          }
+                        } catch(e){}
+
+                        return (
+                          <tr key={p.id} className="align-middle">
+                            <td className="text-center">{idx + 1}</td>
+                            <td className="font-bold uppercase">{p.namaLengkap}</td>
+                            <td className="font-mono">{p.nik}</td>
+                            <td className="uppercase">{p.tempatLahir}, {formattedDob}</td>
+                            <td className="text-center">{p.jenisKelamin}</td>
+                            <td className="text-center">{hitungUmur(p.tanggalLahir)} THN</td>
+                            <td>RT {p.rt} / RW {p.rw}</td>
+                            <td>{p.statusHubungan}</td>
+                            <td className="relative h-8">
+                              <span className="absolute left-1 top-0.5 text-[8px] text-slate-400">{idx + 1}.</span>
+                              <div className={`border-b border-dashed border-slate-300 w-4/5 mx-auto h-5 ${idx % 2 === 0 ? "mr-auto pl-4" : "ml-auto pr-4"}`}></div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={9} className="text-center py-4 text-slate-500 italic">Tidak ada warga wajib pilih yang memenuhi filter DPT saat ini.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+
+                {/* Signatures */}
+                <div className="grid grid-cols-2 gap-4 mt-12 text-[11px] font-semibold text-center leading-relaxed">
+                  <div>
+                    <p>Mengetahui,</p>
+                    <p className="uppercase">Ketua RT {filterRt || "..."} / RW {filterRw || "..."}</p>
+                    <div className="h-16"></div>
+                    <p className="border-b border-black w-3/5 mx-auto uppercase">........................................</p>
+                    <p className="text-[9px] text-slate-500">Pemberi Rekomendasi</p>
+                  </div>
+                  <div>
+                    <p>Wargaluyu, {new Date().toLocaleDateString("id-ID", { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                    <p className="uppercase">PPS Desa Wargaluyu</p>
+                    <div className="h-16"></div>
+                    <p className="border-b border-black w-3/5 mx-auto uppercase">SUTISNA WIJAYA</p>
+                    <p className="text-[9px] text-slate-500">Ketua Bidang Pemutakhiran Data</p>
+                  </div>
+                </div>
+
+                {/* Print footer notice */}
+                <div className="text-center text-[8px] text-slate-400 mt-16 italic border-t border-slate-100 pt-2 no-print">
+                  Dokumen ini dicetak otomatis secara mandiri melalui Aplikasi Layanan Desa Terpadu SIPENDUK WARGALUYU (SIDEWA).
+                </div>
+              </div>
+            </div>
+
+            {/* Print Modal Actions */}
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between no-print">
+              <span className="text-[11px] text-slate-500 font-semibold flex items-center gap-1">
+                💡 <strong className="text-blue-500">Tips:</strong> Pastikan printer diatur ke portrait (tegak) dan skala 100% atau fit-to-page.
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setIsPrintOpen(false)}
+                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 text-xs font-bold rounded-xl transition cursor-pointer"
+                >
+                  Tutup Pratinjau
+                </button>
+                <button
+                  onClick={() => {
+                    db.addLog(currentUser, `Mencetak dokumen Daftar Pemilih Tetap (DPT) RT ${filterRt || 'Semua'}/RW ${filterRw || 'Semua'}`);
+                    setTimeout(() => {
+                      window.print();
+                    }, 100);
+                  }}
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-extrabold rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-sm shadow-amber-600/10"
+                >
+                  <Printer className="w-4 h-4" /> Buka Cetak Sistem (PDF)
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

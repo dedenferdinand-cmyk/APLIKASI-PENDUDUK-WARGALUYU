@@ -1235,11 +1235,46 @@ export class MockSupabaseClient {
   private recalculateKkAnggotaCount(noKk: string) {
     const penduduk = this.getItems<Penduduk>(STORAGE_KEYS.PENDUDUK);
     const keluarga = this.getItems<Keluarga>(STORAGE_KEYS.KELUARGA);
-    const count = penduduk.filter(p => p.noKk === noKk).length;
+    const familyMembers = penduduk.filter(p => p.noKk === noKk);
+    const count = familyMembers.length;
+
+    if (count === 0) {
+      const index = keluarga.findIndex(k => k.noKk === noKk);
+      if (index !== -1) {
+        const target = keluarga[index];
+        const filtered = keluarga.filter(k => k.noKk !== noKk);
+        this.saveItems(STORAGE_KEYS.KELUARGA, filtered, true);
+        this.supDelete("keluarga", target.id);
+      }
+      return;
+    }
+
     const index = keluarga.findIndex(k => k.noKk === noKk);
+    const headOfFamily = familyMembers.find(p => p.statusHubungan === "Kepala Keluarga") || familyMembers[0];
+
     if (index !== -1) {
       keluarga[index].jumlahAnggota = count;
-      this.saveItems(STORAGE_KEYS.KELUARGA, keluarga);
+      if (headOfFamily) {
+        keluarga[index].kepalaKeluargaId = headOfFamily.id;
+        keluarga[index].kepalaKeluargaNama = headOfFamily.namaLengkap;
+      }
+      this.saveItems(STORAGE_KEYS.KELUARGA, keluarga, true);
+      this.supUpsert("keluarga", keluarga[index]);
+    } else {
+      // Create new KK automatically
+      const newKk: Keluarga = {
+        id: "kk-" + Math.random().toString(36).substring(2, 9),
+        noKk: noKk,
+        kepalaKeluargaId: headOfFamily ? headOfFamily.id : "",
+        kepalaKeluargaNama: headOfFamily ? headOfFamily.namaLengkap : "BELUM ADA KEPALA KELUARGA",
+        alamat: "DUSUN I WARGALUYU",
+        rw: headOfFamily ? headOfFamily.rw : "01",
+        rt: headOfFamily ? headOfFamily.rt : "01",
+        jumlahAnggota: count
+      };
+      keluarga.unshift(newKk);
+      this.saveItems(STORAGE_KEYS.KELUARGA, keluarga, true);
+      this.supUpsert("keluarga", newKk);
     }
   }
 
