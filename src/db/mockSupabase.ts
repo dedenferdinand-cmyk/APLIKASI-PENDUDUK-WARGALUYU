@@ -1287,6 +1287,28 @@ export class MockSupabaseClient {
     if (user.role !== "ADMIN_DESA") {
       throw new Error("Hanya Admin Desa yang dapat mereset ulang database!");
     }
+
+    // Capture auto-backup before wiping in case they need to revert
+    try {
+      const backup: { [key: string]: string | null } = {};
+      const keys = [
+        STORAGE_KEYS.USERS,
+        STORAGE_KEYS.KELUARGA,
+        STORAGE_KEYS.PENDUDUK,
+        STORAGE_KEYS.KELAHIRAN,
+        STORAGE_KEYS.KEMATIAN,
+        STORAGE_KEYS.MUTASI,
+        STORAGE_KEYS.LOGS,
+        STORAGE_KEYS.WILAYAH
+      ];
+      keys.forEach(k => {
+        backup[k] = localStorage.getItem(k);
+      });
+      localStorage.setItem("sipenduk_backup_before_reset", JSON.stringify(backup));
+    } catch (e) {
+      console.warn("Gagal membuat cadangan pra-reset lokal:", e);
+    }
+
     localStorage.removeItem(STORAGE_KEYS.USERS);
     localStorage.removeItem(STORAGE_KEYS.KELUARGA);
     localStorage.removeItem(STORAGE_KEYS.PENDUDUK);
@@ -1298,6 +1320,48 @@ export class MockSupabaseClient {
     localStorage.removeItem("sidewa_deleted_user_ids");
     this.init();
     this.addLog(user, "Melakukan reset database kependudukan ke kondisi awal.");
+  }
+
+  hasBackupBeforeReset(): boolean {
+    const backupStr = localStorage.getItem("sipenduk_backup_before_reset");
+    if (!backupStr) return false;
+    try {
+      const backup = JSON.parse(backupStr);
+      // Ensure there's actually some content in the backup keys
+      return Object.values(backup).some(v => v !== null && v !== "[]" && v !== "");
+    } catch {
+      return false;
+    }
+  }
+
+  undoResetDatabase(user: User): boolean {
+    if (user.role !== "ADMIN_DESA") {
+      throw new Error("Hanya Admin Desa yang dapat memulihkan cadangan database!");
+    }
+    const backupStr = localStorage.getItem("sipenduk_backup_before_reset");
+    if (!backupStr) {
+      throw new Error("Tidak ditemukan data cadangan sebelum reset terakhir.");
+    }
+
+    try {
+      const backup = JSON.parse(backupStr);
+      Object.entries(backup).forEach(([key, val]) => {
+        if (val !== null) {
+          localStorage.setItem(key, val as string);
+        } else {
+          localStorage.removeItem(key);
+        }
+      });
+      // Also restore initialized marker
+      localStorage.setItem(STORAGE_KEYS.IS_INITIALIZED, "true");
+      // Remove backup key once restored to prevent redundant undo
+      localStorage.removeItem("sipenduk_backup_before_reset");
+
+      this.addLog(user, "Membatalkan reset database kependudukan dan memulihkan data sebelum reset.");
+      return true;
+    } catch (e: any) {
+      throw new Error("Gagal mengurai atau menerapkan data cadangan: " + e.message);
+    }
   }
 
   // Under-the-hood direct store accessor helpers

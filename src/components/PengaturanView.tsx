@@ -15,7 +15,9 @@ import {
   CheckCircle, 
   Map,
   Activity,
-  Terminal
+  Terminal,
+  Lock,
+  RotateCcw
 } from "lucide-react";
 import { User as UserType } from "../types";
 import { db } from "../db/mockSupabase";
@@ -30,6 +32,7 @@ export default function PengaturanView({ currentUser, addToast, onLogout }: Peng
   const [supabaseLoading, setSupabaseLoading] = React.useState(false);
   const [connectionStatus, setConnectionStatus] = React.useState<{ success: boolean; message: string } | null>(null);
   const [syncStatus, setSyncStatus] = React.useState<{ tableResult: any } | null>(null);
+  const [hasBackup, setHasBackup] = React.useState(db.hasBackupBeforeReset());
 
   // Custom Confirmation Modal state to bypass browser window.confirm constraints inside sandboxed iframes
   const [confirmModal, setConfirmModal] = React.useState<{
@@ -125,6 +128,7 @@ export default function PengaturanView({ currentUser, addToast, onLogout }: Peng
         try {
           db.resetDatabase(currentUser);
           addToast("Database kependudukan berhasil di-reset ke kondisi awal!", "success");
+          setHasBackup(true);
           // Trigger simple logout so session recreates with fresh data
           setTimeout(() => {
             onLogout();
@@ -132,6 +136,32 @@ export default function PengaturanView({ currentUser, addToast, onLogout }: Peng
           }, 1000);
         } catch (e: any) {
           addToast(e.message || "Gagal mereset database.", "error");
+        }
+      }
+    });
+  };
+
+  const handleUndoReset = () => {
+    if (currentUser.role !== "ADMIN_DESA") {
+      addToast("Hanya Administrator Desa yang berwenang memulihkan cadangan!", "error");
+      return;
+    }
+
+    setConfirmModal({
+      isOpen: true,
+      title: "Urungkan Reset & Pulihkan Data",
+      message: "Apakah Anda yakin ingin membatalkan pembersihan database terakhir dan memulihkan seluruh data kependudukan lokal sebelum di-reset?",
+      onConfirm: () => {
+        try {
+          db.undoResetDatabase(currentUser);
+          addToast("Cadangan berhasil dipulihkan! Seluruh data Anda sebelum reset telah kembali.", "success");
+          setHasBackup(false);
+          setTimeout(() => {
+            onLogout();
+            addToast("Sesi dipulihkan. Silakan masuk kembali.", "info");
+          }, 1000);
+        } catch (e: any) {
+          addToast(e.message || "Gagal memulihkan cadangan.", "error");
         }
       }
     });
@@ -280,13 +310,24 @@ export default function PengaturanView({ currentUser, addToast, onLogout }: Peng
           </div>
 
           {currentUser.role === "ADMIN_DESA" ? (
-            <button
-              id="btn-database-reset"
-              onClick={handleResetDatabase}
-              className="mt-6 w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-rose-500/10 hover:bg-rose-500 hover:text-white border border-rose-500/20 text-rose-500 hover:border-transparent font-bold transition-all text-xs cursor-pointer shadow-sm active:scale-[0.98]"
-            >
-              <Trash2 className="w-4 h-4 transition-transform group-hover:rotate-6" /> Reset Database ke Awal
-            </button>
+            <div className="space-y-2 mt-6">
+              {hasBackup && (
+                <button
+                  id="btn-database-undo-reset"
+                  onClick={handleUndoReset}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold transition-all text-xs cursor-pointer shadow-sm active:scale-[0.98] animate-pulse"
+                >
+                  <RotateCcw className="w-4 h-4" /> Urungkan Reset & Pulihkan Data
+                </button>
+              )}
+              <button
+                id="btn-database-reset"
+                onClick={handleResetDatabase}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-rose-500/10 hover:bg-rose-500 hover:text-white border border-rose-500/20 text-rose-500 hover:border-transparent font-bold transition-all text-xs cursor-pointer shadow-sm active:scale-[0.98]"
+              >
+                <Trash2 className="w-4 h-4 transition-transform group-hover:rotate-6" /> Reset Database ke Awal
+              </button>
+            </div>
           ) : (
             <div className="mt-6 p-2 rounded bg-slate-50 dark:bg-slate-955 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest select-none border border-slate-200/30">
               Hak Akses Terkunci
