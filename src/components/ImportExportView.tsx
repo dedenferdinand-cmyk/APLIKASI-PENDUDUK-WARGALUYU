@@ -15,7 +15,9 @@ import {
   Download,
   Terminal,
   Loader2,
-  Lock
+  Lock,
+  Trash2,
+  RotateCcw
 } from "lucide-react";
 import { User, Penduduk, Keluarga } from "../types";
 import { db } from "../db/mockSupabase";
@@ -100,6 +102,81 @@ export default function ImportExportView({ currentUser, addToast }: ImportExport
   const [importLogs, setImportLogs] = useState<string[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const [isExporting, setIsExporting] = useState<string | null>(null);
+
+  // Custom Confirmation Modal state to bypass browser window.confirm constraints
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: () => {}
+  });
+
+  const handleWipeKependudukanOnly = () => {
+    if (currentUser.role !== "ADMIN_DESA") {
+      addToast("Hanya Admin Desa yang memiliki wewenang mengosongkan database!", "error");
+      return;
+    }
+
+    setConfirmModal({
+      isOpen: true,
+      title: "Kosongkan Data Penduduk & KK saja",
+      message: "Apakah Anda yakin ingin menghapus seluruh data kependudukan (Penduduk, Kartu Keluarga, Kelahiran, Kematian, Mutasi)? Pilihan ini akan TETAP MENJAGA konfigurasi Dusun/RW/RT Anda agar tidak perlu membuat ulang hierarki wilayah dari nol. Lanjutkan?",
+      onConfirm: () => {
+        try {
+          // Backup first
+          try {
+            const backup: { [key: string]: string | null } = {};
+            const keys = ["sidewa_keluarga", "sidewa_penduduk", "sidewa_kelahiran", "sidewa_kematian", "sidewa_mutasi", "sidewa_logs"];
+            keys.forEach(k => {
+              backup[k] = localStorage.getItem(k);
+            });
+            localStorage.setItem("sipenduk_backup_before_reset", JSON.stringify(backup));
+          } catch (e) {
+            console.warn("Gagal mencadangkan:", e);
+          }
+
+          localStorage.setItem("sidewa_keluarga", JSON.stringify([]));
+          localStorage.setItem("sidewa_penduduk", JSON.stringify([]));
+          localStorage.setItem("sidewa_kelahiran", JSON.stringify([]));
+          localStorage.setItem("sidewa_kematian", JSON.stringify([]));
+          localStorage.setItem("sidewa_mutasi", JSON.stringify([]));
+          
+          db.addLog(currentUser, "Mengosongkan seluruh draf data kependudukan (warga & KK) untuk persiapan impor baru.");
+          addToast("Seluruh data kependudukan berhasil dibersihkan! Silakan mulai impor file dari awal.", "success");
+          window.dispatchEvent(new Event("sipenduk-db-updated"));
+        } catch (err: any) {
+          addToast("Gagal membersihkan data kependudukan: " + err.message, "error");
+        }
+      }
+    });
+  };
+
+  const handleWipeAll = () => {
+    if (currentUser.role !== "ADMIN_DESA") {
+      addToast("Hanya Admin Desa yang memiliki wewenang mengosongkan database!", "error");
+      return;
+    }
+
+    setConfirmModal({
+      isOpen: true,
+      title: "Kosongkan Seluruh Database (Penduduk + Wilayah)",
+      message: "PERINGATAN: Tindakan ini akan menghapus data kependudukan SEKALIGUS struktur Dusun, RW, dan RT saat ini! Anda harus membuat/mengimpor ulang pembagian wilayah dari nol. Apakah Anda yakin?",
+      onConfirm: () => {
+        try {
+          db.wipeDatabase(currentUser);
+          addToast("Seluruh database kependudukan dan hierarki wilayah dikosongkan!", "success");
+          window.dispatchEvent(new Event("sipenduk-db-updated"));
+        } catch (err: any) {
+          addToast("Gagal membersihkan database: " + err.message, "error");
+        }
+      }
+    });
+  };
 
   // RFC 4180 COMPLIANT CSV PARSER
   const parseCSV = (text: string) => {
@@ -588,6 +665,36 @@ export default function ImportExportView({ currentUser, addToast }: ImportExport
             </div>
             <h3 className="text-sm font-bold text-slate-850 dark:text-slate-200 mt-3">Unggah / Impor File Excel (.xlsx / .csv)</h3>
             <p className="text-xs text-slate-400 mt-1">Unggah file template kependudukan Anda untuk memasukkan data warga secara massal.</p>
+
+            {/* Quick Wipe Database Recommendation Panel for Admins */}
+            {currentUser.role === "ADMIN_DESA" && (
+              <div className="mt-4 p-3.5 rounded-xl bg-rose-500/5 dark:bg-rose-500/10 border border-rose-500/10 flex flex-col gap-2.5">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-xs font-bold text-rose-700 dark:text-rose-400">Database Warga Berantakan / Ingin Mulai dari Nol?</h4>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Jika hasil impor sebelumnya salah atau berantakan, Anda disarankan mengosongkan database kependudukan terlebih dahulu sebelum mengunggah draf yang baru.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={handleWipeKependudukanOnly}
+                    className="flex-1 min-w-[180px] py-1.5 px-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-[10px] transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Bersihkan Semua Penduduk & KK
+                  </button>
+                  <button
+                    onClick={handleWipeAll}
+                    className="py-1.5 px-2.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 font-bold text-[10px] transition-all cursor-pointer"
+                    title="Hapus Penduduk + Semua Wilayah Dusun/RW/RT"
+                  >
+                    Kosongkan Total
+                  </button>
+                </div>
+              </div>
+            )}
  
             {/* Drag & Drop zone */}
             <div
@@ -747,6 +854,35 @@ export default function ImportExportView({ currentUser, addToast }: ImportExport
         </div>
 
       </div>
+
+      {/* Custom Confirmation Modal */}
+      {confirmModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[9999]">
+          <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-2xl max-w-sm w-full p-6 shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-sm font-extrabold text-slate-800 dark:text-white uppercase tracking-wider">{confirmModal.title}</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">{confirmModal.message}</p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+                className="px-3.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs font-bold rounded-xl transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  confirmModal.onConfirm();
+                  setConfirmModal({ ...confirmModal, isOpen: false });
+                }}
+                className="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl transition cursor-pointer"
+              >
+                Konfirmasi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
