@@ -372,7 +372,20 @@ export default function KeluargaView({ currentUser, addToast }: KeluargaViewProp
                         <Users className="w-3.5 h-3.5" /> {kk.jumlahAnggota} orang
                       </span>
                     </td>
-                    <td className="px-5 py-4 text-right space-x-1 shrink-0">
+                    <td className="px-5 py-4 text-right space-x-1 shrink-0 flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => {
+                          sessionStorage.setItem("SIPENDUK_PREFILL_NO_KK", kk.noKk);
+                          const tabBtn = document.getElementById("menu-item-penduduk") || document.getElementById("mobile-tab-penduduk");
+                          if (tabBtn) {
+                            tabBtn.click();
+                          }
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-emerald-600/10 hover:bg-emerald-600 text-emerald-600 dark:text-emerald-400 hover:text-white dark:hover:text-white text-[11px] font-extrabold transition-all cursor-pointer inline-flex items-center gap-1"
+                        title="Tambah Anggota Keluarga Baru"
+                      >
+                        <Plus className="w-3 h-3" /> Anggota
+                      </button>
                       <button
                         onClick={() => showDetailModal(kk)}
                         className="px-2.5 py-1.5 rounded-lg bg-slate-150 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 text-[11px] font-bold transition-all cursor-pointer"
@@ -619,9 +632,24 @@ export default function KeluargaView({ currentUser, addToast }: KeluargaViewProp
 
             {/* List of members */}
             <div className="p-6">
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                <Users className="w-4 h-4 text-emerald-500" /> Anggota Keluarga Terdaftar ({selectedKkMembers.length})
-              </h4>
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <Users className="w-4 h-4 text-emerald-500" /> Anggota Keluarga Terdaftar ({selectedKkMembers.length})
+                </h4>
+                <button
+                  onClick={() => {
+                    sessionStorage.setItem("SIPENDUK_PREFILL_NO_KK", selectedKk.noKk);
+                    setSelectedKk(null);
+                    const tabBtn = document.getElementById("menu-item-penduduk") || document.getElementById("mobile-tab-penduduk");
+                    if (tabBtn) {
+                      tabBtn.click();
+                    }
+                  }}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-extrabold transition-all shadow-sm shadow-emerald-600/10 active:scale-[0.98] cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Tambah Anggota
+                </button>
+              </div>
               
               <div className="space-y-2.5 max-h-72 overflow-y-auto">
                 {selectedKkMembers.length > 0 ? (

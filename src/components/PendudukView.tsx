@@ -96,6 +96,8 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
   // 15 Form Fields
   const [nik, setNik] = useState("");
   const [noKk, setNoKk] = useState("");
+  const [kkSearch, setKkSearch] = useState("");
+  const [isKkDropdownOpen, setIsKkDropdownOpen] = useState(false);
   const [namaLengkap, setNamaLengkap] = useState("");
   const [tempatLahir, setTempatLahir] = useState("");
   const [tanggalLahir, setTanggalLahir] = useState("");
@@ -146,6 +148,22 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
     };
   }, [currentUser]);
 
+  useEffect(() => {
+    if (kkList.length > 0) {
+      const prefill = sessionStorage.getItem("SIPENDUK_PREFILL_NO_KK");
+      if (prefill) {
+        sessionStorage.removeItem("SIPENDUK_PREFILL_NO_KK");
+        openInsertForm();
+        setNoKk(prefill);
+        setKkSearch(prefill);
+        const foundKk = kkList.find(k => k.noKk === prefill);
+        if (foundKk) {
+          addToast(`Formulir warga baru dibuka otomatis untuk KK: ${foundKk.noKk} (${foundKk.kepalaKeluargaNama})`, "info");
+        }
+      }
+    }
+  }, [kkList]);
+
   const fetchData = async () => {
     try {
       const pData = await db.getPenduduk(currentUser);
@@ -160,7 +178,9 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
   const openInsertForm = () => {
     setEditingId(null);
     setNik("");
-    setNoKk(kkList[0]?.noKk || "");
+    const initialKk = kkList[0]?.noKk || "";
+    setNoKk(initialKk);
+    setKkSearch(initialKk);
     setNamaLengkap("");
     setTempatLahir("");
     setTanggalLahir("2000-01-01");
@@ -202,6 +222,7 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
     setEditingId(p.id);
     setNik(p.nik);
     setNoKk(p.noKk);
+    setKkSearch(p.noKk);
     setNamaLengkap(p.namaLengkap);
     setTempatLahir(p.tempatLahir);
     setTanggalLahir(p.tanggalLahir);
@@ -866,18 +887,100 @@ export default function PendudukView({ currentUser, addToast }: PendudukViewProp
                   />
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 relative">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">No. Kartu Keluarga (KK)</label>
-                  <select
-                    value={noKk}
-                    onChange={(e) => setNoKk(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/20 text-xs text-slate-850 dark:text-slate-100 focus:outline-none"
-                  >
-                    {kkList.map(k => (
-                      <option key={k.id} value={k.noKk}>{k.noKk} (K.K. {k.kepalaKeluargaNama})</option>
-                    ))}
-                    {kkList.length === 0 && <option value="">Tidak ada Kartu Keluarga terdaftar</option>}
-                  </select>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Cari No KK, Nama Kepala Keluarga, atau Alamat..."
+                      value={kkSearch}
+                      onChange={(e) => {
+                        setKkSearch(e.target.value);
+                        setIsKkDropdownOpen(true);
+                        const exactMatch = kkList.find(k => k.noKk === e.target.value.trim());
+                        if (exactMatch) {
+                          setNoKk(exactMatch.noKk);
+                        }
+                      }}
+                      onFocus={() => setIsKkDropdownOpen(true)}
+                      onBlur={() => {
+                        setTimeout(() => {
+                          setIsKkDropdownOpen(false);
+                        }, 250);
+                      }}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/20 text-xs text-slate-850 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 font-mono font-medium tracking-wide"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsKkDropdownOpen(prev => !prev)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-[10px] transition cursor-pointer"
+                    >
+                      ▼
+                    </button>
+                  </div>
+
+                  {/* Autocomplete Dropdown List */}
+                  {isKkDropdownOpen && (
+                    <div className="absolute z-50 left-0 w-full mt-1 bg-white dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-xl shadow-xl max-h-48 overflow-y-auto divide-y divide-slate-150 dark:divide-slate-800">
+                      {kkList.filter(k => {
+                        const q = kkSearch.toLowerCase().trim();
+                        if (!q) return true;
+                        return k.noKk.includes(q) || 
+                               k.kepalaKeluargaNama.toLowerCase().includes(q) || 
+                               k.alamat.toLowerCase().includes(q);
+                      }).slice(0, 8).map(k => (
+                        <div
+                          key={k.id}
+                          onMouseDown={() => {
+                            setNoKk(k.noKk);
+                            setKkSearch(k.noKk);
+                            setIsKkDropdownOpen(false);
+                          }}
+                          className={`p-2.5 text-left cursor-pointer transition-colors ${
+                            noKk === k.noKk 
+                              ? "bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-semibold" 
+                              : "hover:bg-slate-50 dark:hover:bg-slate-950/40 text-slate-700 dark:text-slate-200"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between text-xs font-mono font-bold">
+                            <span>{k.noKk}</span>
+                            <span className="text-[9px] font-sans font-extrabold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-1 py-0.2 rounded">RT {k.rt}/RW {k.rw}</span>
+                          </div>
+                          <div className="text-[11px] font-sans font-bold text-slate-800 dark:text-slate-300 mt-1 truncate">
+                            K.K. {k.kepalaKeluargaNama}
+                          </div>
+                          <div className="text-[9px] font-sans text-slate-400 dark:text-slate-500 truncate mt-0.5">
+                            {k.alamat}
+                          </div>
+                        </div>
+                      ))}
+                      {kkList.filter(k => {
+                        const q = kkSearch.toLowerCase().trim();
+                        if (!q) return true;
+                        return k.noKk.includes(q) || k.kepalaKeluargaNama.toLowerCase().includes(q) || k.alamat.toLowerCase().includes(q);
+                      }).length === 0 && (
+                        <div className="p-3 text-center text-xs text-slate-450 italic bg-slate-50/50 dark:bg-slate-950/20">
+                          Tidak menemukan KK terdaftar
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Visual Indicator of Selected KK */}
+                  {(() => {
+                    const selectedKkObj = kkList.find(k => k.noKk === noKk);
+                    if (selectedKkObj) {
+                      return (
+                        <div className="text-[10px] bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/10 p-1.5 rounded-lg flex items-center justify-between gap-2 text-slate-600 dark:text-emerald-400 mt-1">
+                          <span className="truncate">
+                            Terpilih: <strong>{selectedKkObj.kepalaKeluargaNama}</strong> ({selectedKkObj.alamat})
+                          </span>
+                          <span className="shrink-0 text-emerald-600 dark:text-emerald-450 font-bold text-[9px] uppercase tracking-wider bg-emerald-500/10 px-1.5 py-0.2 rounded">RT {selectedKkObj.rt}</span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
 
               </div>
