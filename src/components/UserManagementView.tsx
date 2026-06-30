@@ -275,21 +275,22 @@ export default function UserManagementView({ currentUser, addToast }: UserManage
   const handleDeleteDusun = (dusunId: string, namaDusun: string) => {
     try {
       const dusunObj = wilayahList.find(d => d.id === dusunId);
-      if (dusunObj && dusunObj.rws.length > 0) {
-        addToast(`Tidak bisa menghapus ${namaDusun} karena masih memiliki RW di bawahnya!`, "warning");
-        return;
-      }
+      const hasSubWilayah = dusunObj && dusunObj.rws && dusunObj.rws.length > 0;
+      
+      const message = hasSubWilayah
+        ? `Apakah Anda yakin ingin menghapus wilayah Dusun "${namaDusun}"? PERINGATAN: Dusun ini memiliki ${dusunObj.rws.length} RW dan seluruh RT di dalamnya yang akan ikut terhapus secara permanen!`
+        : `Apakah Anda yakin ingin menghapus wilayah Dusun "${namaDusun}" dari konfigurasi sistem?`;
 
       setConfirmModal({
         isOpen: true,
         title: "Konfirmasi Hapus Dusun",
-        message: `Apakah Anda yakin ingin menghapus wilayah Dusun "${namaDusun}" dari konfigurasi sistem?`,
+        message,
         onConfirm: () => {
           try {
             const list = wilayahList.filter(d => d.id !== dusunId);
             db.saveWilayah(list, currentUser);
             fetchWilayah();
-            addToast(`Wilayah ${namaDusun} didelete dari draf sistem.`, "success");
+            addToast(`Wilayah ${namaDusun} beserta sub-wilayahnya berhasil dihapus dari draf sistem.`, "success");
           } catch (err: any) {
             console.error(err);
             addToast(`Gagal menghapus Dusun: ${err.message || err}`, "error");

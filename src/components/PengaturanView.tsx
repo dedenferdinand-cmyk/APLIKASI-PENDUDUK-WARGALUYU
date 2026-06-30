@@ -141,6 +141,33 @@ export default function PengaturanView({ currentUser, addToast, onLogout }: Peng
     });
   };
 
+  const handleWipeDatabase = () => {
+    if (currentUser.role !== "ADMIN_DESA") {
+      addToast("Hanya Administrator Desa yang berwenang mengosongkan database!", "error");
+      return;
+    }
+
+    setConfirmModal({
+      isOpen: true,
+      title: "Kosongkan Seluruh Database",
+      message: "PERINGATAN KRITIS: Anda akan menghapus SELURUH entri kependudukan, KK, kelahiran, mutasi, log audit, DAN daftar wilayah dusun/RW/RT saat ini (menjadi draf kosong total untuk mulai dari nol). Tindakan ini masih bisa diurungkan (undo) sebelum Anda menutup browser. Apakah Anda benar-benar yakin?",
+      onConfirm: () => {
+        try {
+          db.wipeDatabase(currentUser);
+          addToast("Seluruh database berhasil dikosongkan (Mulai dari Nol)!", "success");
+          setHasBackup(true);
+          // Trigger simple logout so session recreates with empty data
+          setTimeout(() => {
+            onLogout();
+            addToast("Sesi dikosongkan. Silakan masuk kembali.", "info");
+          }, 1000);
+        } catch (e: any) {
+          addToast(e.message || "Gagal mengosongkan database.", "error");
+        }
+      }
+    });
+  };
+
   const handleUndoReset = () => {
     if (currentUser.role !== "ADMIN_DESA") {
       addToast("Hanya Administrator Desa yang berwenang memulihkan cadangan!", "error");
@@ -310,7 +337,7 @@ export default function PengaturanView({ currentUser, addToast, onLogout }: Peng
           </div>
 
           {currentUser.role === "ADMIN_DESA" ? (
-            <div className="space-y-2 mt-6">
+            <div className="space-y-2.5 mt-6">
               {hasBackup && (
                 <button
                   id="btn-database-undo-reset"
@@ -321,11 +348,18 @@ export default function PengaturanView({ currentUser, addToast, onLogout }: Peng
                 </button>
               )}
               <button
+                id="btn-database-wipe"
+                onClick={handleWipeDatabase}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold transition-all text-xs cursor-pointer shadow-sm active:scale-[0.98]"
+              >
+                <Trash2 className="w-4 h-4" /> Kosongkan Database (Mulai dari Nol)
+              </button>
+              <button
                 id="btn-database-reset"
                 onClick={handleResetDatabase}
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-rose-500/10 hover:bg-rose-500 hover:text-white border border-rose-500/20 text-rose-500 hover:border-transparent font-bold transition-all text-xs cursor-pointer shadow-sm active:scale-[0.98]"
+                className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 font-bold transition-all text-[11px] cursor-pointer shadow-sm active:scale-[0.98]"
               >
-                <Trash2 className="w-4 h-4 transition-transform group-hover:rotate-6" /> Reset Database ke Awal
+                Reset ke Demo Default (Bawaan)
               </button>
             </div>
           ) : (

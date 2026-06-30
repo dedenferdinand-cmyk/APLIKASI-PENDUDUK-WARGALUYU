@@ -1322,6 +1322,54 @@ export class MockSupabaseClient {
     this.addLog(user, "Melakukan reset database kependudukan ke kondisi awal.");
   }
 
+  wipeDatabase(user: User): void {
+    if (user.role !== "ADMIN_DESA") {
+      throw new Error("Hanya Admin Desa yang dapat mengosongkan database!");
+    }
+
+    // Capture auto-backup before wiping in case they need to revert
+    try {
+      const backup: { [key: string]: string | null } = {};
+      const keys = [
+        STORAGE_KEYS.USERS,
+        STORAGE_KEYS.KELUARGA,
+        STORAGE_KEYS.PENDUDUK,
+        STORAGE_KEYS.KELAHIRAN,
+        STORAGE_KEYS.KEMATIAN,
+        STORAGE_KEYS.MUTASI,
+        STORAGE_KEYS.LOGS,
+        STORAGE_KEYS.WILAYAH
+      ];
+      keys.forEach(k => {
+        backup[k] = localStorage.getItem(k);
+      });
+      localStorage.setItem("sipenduk_backup_before_reset", JSON.stringify(backup));
+    } catch (e) {
+      console.warn("Gagal membuat cadangan pra-pengosongan lokal:", e);
+    }
+
+    // Set lists to completely empty arrays (preserving users so they can still log in)
+    localStorage.setItem(STORAGE_KEYS.KELUARGA, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.PENDUDUK, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.KELAHIRAN, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.KEMATIAN, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.MUTASI, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.WILAYAH, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.IS_INITIALIZED, "true");
+    
+    // Clear logs but add one fresh entry for the wipe
+    const firstLog: AktivitasLog[] = [
+      {
+        id: "log-" + Date.now(),
+        operatorNama: user.nama,
+        operatorRole: user.role,
+        aktivitas: "Mengosongkan seluruh database kependudukan dan konfigurasi wilayah (Draf Kosong).",
+        timestamp: new Date().toISOString()
+      }
+    ];
+    localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(firstLog));
+  }
+
   hasBackupBeforeReset(): boolean {
     const backupStr = localStorage.getItem("sipenduk_backup_before_reset");
     if (!backupStr) return false;
