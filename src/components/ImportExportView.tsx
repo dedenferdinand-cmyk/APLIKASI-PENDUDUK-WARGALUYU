@@ -126,27 +126,9 @@ export default function ImportExportView({ currentUser, addToast }: ImportExport
       isOpen: true,
       title: "Kosongkan Data Penduduk & KK saja",
       message: "Apakah Anda yakin ingin menghapus seluruh data kependudukan (Penduduk, Kartu Keluarga, Kelahiran, Kematian, Mutasi)? Pilihan ini akan TETAP MENJAGA konfigurasi Dusun/RW/RT Anda agar tidak perlu membuat ulang hierarki wilayah dari nol. Lanjutkan?",
-      onConfirm: () => {
+      onConfirm: async () => {
         try {
-          // Backup first
-          try {
-            const backup: { [key: string]: string | null } = {};
-            const keys = ["sidewa_keluarga", "sidewa_penduduk", "sidewa_kelahiran", "sidewa_kematian", "sidewa_mutasi", "sidewa_logs"];
-            keys.forEach(k => {
-              backup[k] = localStorage.getItem(k);
-            });
-            localStorage.setItem("sipenduk_backup_before_reset", JSON.stringify(backup));
-          } catch (e) {
-            console.warn("Gagal mencadangkan:", e);
-          }
-
-          localStorage.setItem("sidewa_keluarga", JSON.stringify([]));
-          localStorage.setItem("sidewa_penduduk", JSON.stringify([]));
-          localStorage.setItem("sidewa_kelahiran", JSON.stringify([]));
-          localStorage.setItem("sidewa_kematian", JSON.stringify([]));
-          localStorage.setItem("sidewa_mutasi", JSON.stringify([]));
-          
-          db.addLog(currentUser, "Mengosongkan seluruh draf data kependudukan (warga & KK) untuk persiapan impor baru.");
+          await db.wipeKependudukanOnly(currentUser);
           addToast("Seluruh data kependudukan berhasil dibersihkan! Silakan mulai impor file dari awal.", "success");
           window.dispatchEvent(new Event("sipenduk-db-updated"));
         } catch (err: any) {
@@ -166,9 +148,9 @@ export default function ImportExportView({ currentUser, addToast }: ImportExport
       isOpen: true,
       title: "Kosongkan Seluruh Database (Penduduk + Wilayah)",
       message: "PERINGATAN: Tindakan ini akan menghapus data kependudukan SEKALIGUS struktur Dusun, RW, dan RT saat ini! Anda harus membuat/mengimpor ulang pembagian wilayah dari nol. Apakah Anda yakin?",
-      onConfirm: () => {
+      onConfirm: async () => {
         try {
-          db.wipeDatabase(currentUser);
+          await db.wipeDatabase(currentUser);
           addToast("Seluruh database kependudukan dan hierarki wilayah dikosongkan!", "success");
           window.dispatchEvent(new Event("sipenduk-db-updated"));
         } catch (err: any) {

@@ -151,9 +151,9 @@ export default function PengaturanView({ currentUser, addToast, onLogout }: Peng
       isOpen: true,
       title: "Kosongkan Seluruh Database",
       message: "PERINGATAN KRITIS: Anda akan menghapus SELURUH entri kependudukan, KK, kelahiran, mutasi, log audit, DAN daftar wilayah dusun/RW/RT saat ini (menjadi draf kosong total untuk mulai dari nol). Tindakan ini masih bisa diurungkan (undo) sebelum Anda menutup browser. Apakah Anda benar-benar yakin?",
-      onConfirm: () => {
+      onConfirm: async () => {
         try {
-          db.wipeDatabase(currentUser);
+          await db.wipeDatabase(currentUser);
           addToast("Seluruh database berhasil dikosongkan (Mulai dari Nol)!", "success");
           setHasBackup(true);
           // Trigger simple logout so session recreates with empty data

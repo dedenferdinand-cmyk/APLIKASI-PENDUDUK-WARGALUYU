@@ -1322,7 +1322,7 @@ export class MockSupabaseClient {
     this.addLog(user, "Melakukan reset database kependudukan ke kondisi awal.");
   }
 
-  wipeDatabase(user: User): void {
+  async wipeDatabase(user: User): Promise<void> {
     if (user.role !== "ADMIN_DESA") {
       throw new Error("Hanya Admin Desa yang dapat mengosongkan database!");
     }
@@ -1348,6 +1348,20 @@ export class MockSupabaseClient {
       console.warn("Gagal membuat cadangan pra-pengosongan lokal:", e);
     }
 
+    // 1. Wipe remote database tables in Supabase
+    try {
+      await Promise.all([
+        supabase.from("kelahiran").delete().neq("id", "_non_existent_id_"),
+        supabase.from("kematian").delete().neq("id", "_non_existent_id_"),
+        supabase.from("mutasi").delete().neq("id", "_non_existent_id_"),
+        supabase.from("penduduk").delete().neq("id", "_non_existent_id_"),
+        supabase.from("keluarga").delete().neq("id", "_non_existent_id_"),
+        supabase.from("wilayah").delete().neq("id", "_non_existent_id_")
+      ]);
+    } catch (e) {
+      console.warn("Gagal menghapus data dari Supabase:", e);
+    }
+
     // Set lists to completely empty arrays (preserving users so they can still log in)
     localStorage.setItem(STORAGE_KEYS.KELUARGA, JSON.stringify([]));
     localStorage.setItem(STORAGE_KEYS.PENDUDUK, JSON.stringify([]));
@@ -1361,13 +1375,91 @@ export class MockSupabaseClient {
     const firstLog: AktivitasLog[] = [
       {
         id: "log-" + Date.now(),
-        operatorNama: user.nama,
-        operatorRole: user.role,
-        aktivitas: "Mengosongkan seluruh database kependudukan dan konfigurasi wilayah (Draf Kosong).",
+        userId: user.id,
+        username: user.username,
+        nama: user.nama,
+        role: user.role,
+        deskripsi: "Mengosongkan seluruh database kependudukan dan konfigurasi wilayah (Draf Kosong).",
         timestamp: new Date().toISOString()
       }
     ];
     localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(firstLog));
+
+    // Update sync timestamps to now, so background sync doesn't pull stale data
+    const now = Date.now();
+    this.lastSyncTimestamps["keluarga"] = now;
+    this.lastSyncTimestamps["penduduk"] = now;
+    this.lastSyncTimestamps["kelahiran"] = now;
+    this.lastSyncTimestamps["kematian"] = now;
+    this.lastSyncTimestamps["mutasi"] = now;
+    this.lastSyncTimestamps["wilayah"] = now;
+
+    this.lastLocalWriteTimestamps["keluarga"] = now;
+    this.lastLocalWriteTimestamps["penduduk"] = now;
+    this.lastLocalWriteTimestamps["kelahiran"] = now;
+    this.lastLocalWriteTimestamps["kematian"] = now;
+    this.lastLocalWriteTimestamps["mutasi"] = now;
+    this.lastLocalWriteTimestamps["wilayah"] = now;
+  }
+
+  async wipeKependudukanOnly(user: User): Promise<void> {
+    if (user.role !== "ADMIN_DESA") {
+      throw new Error("Hanya Admin Desa yang dapat mengosongkan database!");
+    }
+
+    // Capture auto-backup before wiping in case they need to revert
+    try {
+      const backup: { [key: string]: string | null } = {};
+      const keys = [
+        STORAGE_KEYS.KELUARGA,
+        STORAGE_KEYS.PENDUDUK,
+        STORAGE_KEYS.KELAHIRAN,
+        STORAGE_KEYS.KEMATIAN,
+        STORAGE_KEYS.MUTASI,
+        STORAGE_KEYS.LOGS
+      ];
+      keys.forEach(k => {
+        backup[k] = localStorage.getItem(k);
+      });
+      localStorage.setItem("sipenduk_backup_before_reset", JSON.stringify(backup));
+    } catch (e) {
+      console.warn("Gagal membuat cadangan pra-pengosongan lokal:", e);
+    }
+
+    // 1. Wipe remote database tables in Supabase (leaving wilayah and users alone)
+    try {
+      await Promise.all([
+        supabase.from("kelahiran").delete().neq("id", "_non_existent_id_"),
+        supabase.from("kematian").delete().neq("id", "_non_existent_id_"),
+        supabase.from("mutasi").delete().neq("id", "_non_existent_id_"),
+        supabase.from("penduduk").delete().neq("id", "_non_existent_id_"),
+        supabase.from("keluarga").delete().neq("id", "_non_existent_id_")
+      ]);
+    } catch (e) {
+      console.warn("Gagal menghapus data dari Supabase:", e);
+    }
+
+    localStorage.setItem(STORAGE_KEYS.KELUARGA, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.PENDUDUK, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.KELAHIRAN, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.KEMATIAN, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.MUTASI, JSON.stringify([]));
+
+    // Update sync timestamps to now, so background sync doesn't pull stale data
+    const now = Date.now();
+    this.lastSyncTimestamps["keluarga"] = now;
+    this.lastSyncTimestamps["penduduk"] = now;
+    this.lastSyncTimestamps["kelahiran"] = now;
+    this.lastSyncTimestamps["kematian"] = now;
+    this.lastSyncTimestamps["mutasi"] = now;
+
+    this.lastLocalWriteTimestamps["keluarga"] = now;
+    this.lastLocalWriteTimestamps["penduduk"] = now;
+    this.lastLocalWriteTimestamps["kelahiran"] = now;
+    this.lastLocalWriteTimestamps["kematian"] = now;
+    this.lastLocalWriteTimestamps["mutasi"] = now;
+
+    this.addLog(user, "Mengosongkan seluruh draf data kependudukan (warga & KK) untuk persiapan impor baru.");
   }
 
   hasBackupBeforeReset(): boolean {
